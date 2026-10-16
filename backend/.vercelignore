@@ -1,0 +1,10 @@
+tests/
+.pytest_cache/
+*.db
+*.sqlite3
+__pycache__/
+*.py[cod]
+seed_data.py
+seed_tasks.py
+.env*
+!.env.example
