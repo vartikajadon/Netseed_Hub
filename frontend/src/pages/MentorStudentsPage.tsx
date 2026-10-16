@@ -1,0 +1,312 @@
+import React, { useEffect, useState, useMemo } from 'react';
+import { Layout } from '../components/Layout';
+import { Card } from '../components/Card';
+import { Table, Column } from '../components/Table';
+import { Badge } from '../components/Badge';
+import { Button } from '../components/Button';
+import { Loading } from '../components/Loading';
+import { ErrorMessage } from '../components/ErrorMessage';
+import { MentorFeedbackModal } from '../components/MentorFeedbackModal';
+import { api } from '../api/client';
+import { Student, Batch, PaginatedStudentList, MentorFeedbackItem } from '../types';
+import {
+  Users, Search, MessageSquare, PlusCircle, Star, Filter, RefreshCw
+} from 'lucide-react';
+
+export const MentorStudentsPage: React.FC = () => {
+  const [students, setStudents] = useState<Student[]>([]);
+  const [batches, setBatches] = useState<Batch[]>([]);
+  const [feedbacks, setFeedbacks] = useState<MentorFeedbackItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Search & Filters
+  const [searchQuery, setSearchQuery] = useState('');
+  const [batchFilter, setBatchFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'DEFAULTERS' | 'DROPOUTS'>('ALL');
+
+  // Modal
+  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
+  const [selectedStudentForFeedback, setSelectedStudentForFeedback] = useState<string | undefined>(undefined);
+
+  const fetchData = async () => {
+    try {
+      setIsLoading(true);
+      const [stdRes, batchData, feedbackData] = await Promise.all([
+        api.get<PaginatedStudentList | Student[]>('/students'),
+        api.get<Batch[]>('/batches'),
+        api.get<MentorFeedbackItem[]>('/feedbacks').catch(() => []),
+      ]);
+
+      const studentList = Array.isArray(stdRes) ? stdRes : stdRes.items || [];
+      setStudents(studentList);
+      setBatches(batchData);
+      setFeedbacks(feedbackData || []);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load assigned students.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleOpenFeedback = (studentId?: string) => {
+    setSelectedStudentForFeedback(studentId);
+    setIsFeedbackModalOpen(true);
+  };
+
+  const handleFeedbackSubmitted = (newFeedback: MentorFeedbackItem) => {
+    setFeedbacks((prev) => [newFeedback, ...prev]);
+  };
+
+  const studentFeedbackMap = useMemo(() => {
+    const map: Record<string, { latestRating: number; latestComment: string }> = {};
+    feedbacks.forEach((fb) => {
+      if (!map[fb.student_id]) {
+        map[fb.student_id] = {
+          latestRating: Number(fb.average_rating),
+          latestComment: fb.comment,
+        };
+      }
+    });
+    return map;
+  }, [feedbacks]);
+
+  const filteredStudents = useMemo(() => {
+    return students.filter((s) => {
+      const name = (s.user?.full_name || '').toLowerCase();
+      const roll = (s.roll_number || '').toLowerCase();
+      const email = (s.user?.email || '').toLowerCase();
+      const q = searchQuery.toLowerCase().trim();
+
+      const matchesSearch = !q || name.includes(q) || roll.includes(q) || email.includes(q);
+      const matchesBatch = batchFilter === 'ALL' || s.batch_id === batchFilter;
+
+      const ratingInfo = studentFeedbackMap[s.id];
+      const isDefaulter = ratingInfo && ratingInfo.latestRating < 2.0;
+
+      const matchesStatus =
+        statusFilter === 'ALL' ||
+        (statusFilter === 'ACTIVE' && (s.enrollment_status === 'ACTIVE' || s.enrollment_status === 'ENROLLED')) ||
+        (statusFilter === 'DROPOUTS' && (s.enrollment_status === 'DROPOUT' || s.enrollment_status === 'DROPPED')) ||
+        (statusFilter === 'DEFAULTERS' && isDefaulter);
+
+      return matchesSearch && matchesBatch && matchesStatus;
+    });
+  }, [students, searchQuery, batchFilter, statusFilter, studentFeedbackMap]);
+
+  const columns: Column<Student>[] = [
+    {
+      header: 'Roll Number',
+      accessor: (item) => (
+        <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 text-xs">
+          {item.roll_number}
+        </span>
+      ),
+    },
+    {
+      header: 'Student Name',
+      accessor: (item) => (
+        <div>
+          <div className="font-bold text-slate-900 dark:text-slate-100">{item.user?.full_name || 'N/A'}</div>
+          <div className="text-[10px] text-slate-600 dark:text-slate-400 font-mono">{item.user?.email || 'N/A'}</div>
+        </div>
+      ),
+    },
+    {
+      header: 'Program & Batch',
+      accessor: (item) => (
+        <div>
+          <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+            {item.program?.title || item.program_id || 'Unassigned'}
+          </div>
+          <div className="text-[10px] text-indigo-600 dark:text-indigo-400 font-medium">
+            {item.batch?.name || item.batch_id || 'No Batch'}
+          </div>
+        </div>
+      ),
+    },
+    {
+      header: 'Status',
+      accessor: (item) => {
+        const isDropout = item.enrollment_status === 'DROPOUT' || item.enrollment_status === 'DROPPED';
+        return (
+          <div>
+            <Badge
+              variant={
+                item.enrollment_status === 'ACTIVE'
+                  ? 'success'
+                  : isDropout
+                  ? 'error'
+                  : 'neutral'
+              }
+            >
+              {item.enrollment_status}
+            </Badge>
+            {isDropout && item.dropout_reason && (
+              <div
+                className="text-[10px] text-purple-600 dark:text-purple-400 mt-0.5 max-w-[180px] truncate italic"
+                title={item.dropout_reason}
+              >
+                "{item.dropout_reason}"
+              </div>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      header: 'Rating',
+      accessor: (item) => {
+        const info = studentFeedbackMap[item.id];
+        if (!info) {
+          return (
+            <span className="text-[11px] text-slate-400 dark:text-slate-500 font-medium italic">
+              Not evaluated
+            </span>
+          );
+        }
+        const isDefaulter = info.latestRating < 2.0;
+        return (
+          <div className="flex items-center gap-1.5">
+            <span
+              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-bold font-mono ${
+                isDefaulter
+                  ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800'
+                  : 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/60'
+              }`}
+            >
+              <Star
+                className={`w-3 h-3 ${
+                  isDefaulter ? 'fill-rose-500 text-rose-500' : 'fill-amber-500 text-amber-500'
+                }`}
+              />
+              {info.latestRating.toFixed(1)}
+            </span>
+            {isDefaulter && (
+              <Badge variant="error" className="text-[9px] uppercase tracking-wider font-black">
+                Defaulter
+              </Badge>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      header: 'Actions',
+      accessor: (item) => (
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => handleOpenFeedback(item.id)}
+          className="text-xs font-semibold hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400"
+        >
+          <MessageSquare className="w-3 h-3 mr-1 text-indigo-600 dark:text-indigo-400" />
+          Give Feedback
+        </Button>
+      ),
+    },
+  ];
+
+  return (
+    <Layout>
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+              <Users className="w-7 h-7 text-indigo-600 dark:text-indigo-400" />
+              Assigned Students Roster
+            </h1>
+            <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 font-medium">
+              Browse, filter, and evaluate all trainees assigned to your cohorts.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" size="sm" onClick={fetchData} className="text-xs">
+              <RefreshCw className="w-3.5 h-3.5 mr-1" />
+              Refresh
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => handleOpenFeedback()}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
+            >
+              <PlusCircle className="w-3.5 h-3.5 mr-1" />
+              Give Feedback
+            </Button>
+          </div>
+        </div>
+
+        {error && <ErrorMessage message={error} />}
+
+        {/* Filter controls */}
+        <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search by student name, roll number, or email..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-1.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder-slate-400"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <select
+              value={batchFilter}
+              onChange={(e) => setBatchFilter(e.target.value)}
+              className="bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-xl px-2.5 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="ALL">All Batches</option>
+              {batches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as any)}
+              className="bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-xl px-2.5 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="ACTIVE">Active Trainees</option>
+              <option value="DROPOUTS">Dropout Students</option>
+              <option value="DEFAULTERS">Defaulters (&lt; 2.0)</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Student Table */}
+        {isLoading ? (
+          <Loading message="Loading student roster..." />
+        ) : (
+          <Card>
+            <Table
+              columns={columns}
+              data={filteredStudents}
+              keyExtractor={(s) => s.id}
+              emptyMessage="No students match the selected filter criteria."
+            />
+          </Card>
+        )}
+
+        {/* Feedback Modal */}
+        <MentorFeedbackModal
+          isOpen={isFeedbackModalOpen}
+          onClose={() => setIsFeedbackModalOpen(false)}
+          students={students}
+          preselectedStudentId={selectedStudentForFeedback}
+          onFeedbackSubmitted={handleFeedbackSubmitted}
+        />
+      </div>
+    </Layout>
+  );
+};

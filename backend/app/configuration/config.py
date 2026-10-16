@@ -1,0 +1,41 @@
+import os
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+DEFAULT_DB_FILE = os.path.join(BASE_DIR, "backend", "netlink_dev.db")
+# Normalize backslashes for SQLite URI on Windows
+SQLITE_DEFAULT_URL = f"sqlite:///{DEFAULT_DB_FILE.replace('\\', '/')}"
+
+class Settings(BaseSettings):
+    APP_NAME: str = "netSEED Hub API"
+    ENVIRONMENT: str = "development"
+    PORT: int = 8000
+    DEBUG: bool = True
+    
+    DATABASE_URL: str = SQLITE_DEFAULT_URL
+    
+    SUPABASE_URL: str = "https://your-project.supabase.co"
+    SUPABASE_ANON_KEY: str = "your-supabase-anon-key"
+    SUPABASE_SERVICE_ROLE_KEY: str = "your-supabase-service-role-key"
+    JWT_SECRET: str = "super-secret-dev-jwt-key-netlink-2026"
+    JWT_ALGORITHM: str = "HS256"
+
+    # Attendance, Biometrics & Geofence Settings
+    NETLINK_OFFICE_LAT: float = 23.111861
+    NETLINK_OFFICE_LON: float = 77.515744
+    GEOFENCE_RADIUS_METERS: float = 100.0
+    GPS_MAX_ACCURACY_METERS: float = 150.0
+    FACE_MATCH_THRESHOLD: float = 0.60
+    FACE_DUPLICATE_THRESHOLD: float = 0.82
+    LIVENESS_MIN_SCORE: float = 0.70
+    MIN_FACE_QUALITY_SCORE: float = 0.60
+    MIN_SAMPLES_FOR_ENROLLMENT: int = 3
+    MAX_SAMPLES_FOR_ENROLLMENT: int = 5
+
+    model_config = SettingsConfigDict(
+        env_file=os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore"
+    )
+
+settings = Settings()
