@@ -179,6 +179,21 @@ export const Login: React.FC = () => {
                   >
                     Save
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setApiBaseUrl(null);
+                      const def = getApiBaseUrl();
+                      setCurrentBaseUrl(def);
+                      setCustomUrl(def);
+                      setShowServerConfig(false);
+                      setError(null);
+                      setSuccessMsg('Reset backend URL to default.');
+                    }}
+                    className="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-medium rounded-lg transition-colors cursor-pointer"
+                  >
+                    Reset
+                  </button>
                 </div>
                 <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1.5">
                   Paste your live Vercel backend URL (e.g. <code>https://netseed-hub.vercel.app</code>).
