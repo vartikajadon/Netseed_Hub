@@ -5,16 +5,29 @@ import { Card } from '../components/Card';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { ErrorMessage } from '../components/ErrorMessage';
-import { Shield, KeyRound, CheckCircle2 } from 'lucide-react';
+import { Shield, KeyRound, CheckCircle2, Globe, Settings2 } from 'lucide-react';
+import { getApiBaseUrl, setApiBaseUrl } from '../api/client';
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [currentBaseUrl, setCurrentBaseUrl] = useState(getApiBaseUrl());
+  const [showServerConfig, setShowServerConfig] = useState(false);
+  const [customUrl, setCustomUrl] = useState(getApiBaseUrl());
   const { login, getDashboardRoute } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+
+  const handleSaveServerUrl = () => {
+    setApiBaseUrl(customUrl);
+    const updated = getApiBaseUrl();
+    setCurrentBaseUrl(updated);
+    setShowServerConfig(false);
+    setError(null);
+    setSuccessMsg(`Backend server updated to: ${updated}`);
+  };
 
   useEffect(() => {
     if (searchParams.get('logout') === 'success') {
@@ -129,6 +142,49 @@ export const Login: React.FC = () => {
                 <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">admin@netlink.org</div>
               </button>
             </div>
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-800">
+            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+              <span className="flex items-center gap-1.5 truncate max-w-[240px]">
+                <Globe className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                <span className="truncate">API: <strong className="font-mono text-slate-700 dark:text-slate-300">{currentBaseUrl}</strong></span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowServerConfig(!showServerConfig)}
+                className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline shrink-0"
+              >
+                {showServerConfig ? 'Hide' : 'Change Server'}
+              </button>
+            </div>
+
+            {showServerConfig && (
+              <div className="mt-2.5 p-3 bg-slate-100 dark:bg-slate-800/70 rounded-xl text-left border border-slate-200 dark:border-slate-700">
+                <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Backend API URL:
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={customUrl}
+                    onChange={(e) => setCustomUrl(e.target.value)}
+                    placeholder="https://your-backend.vercel.app"
+                    className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSaveServerUrl}
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                  >
+                    Save
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1.5">
+                  Paste your live Vercel backend URL (e.g. <code>https://netseed-hub.vercel.app</code>).
+                </p>
+              </div>
+            )}
           </div>
         </Card>
       </div>
