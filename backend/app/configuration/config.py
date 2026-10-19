@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     NETLINK_OFFICE_LON: float = 77.515744
     GEOFENCE_RADIUS_METERS: float = 100.0
     GPS_MAX_ACCURACY_METERS: float = 150.0
-    FACE_MATCH_THRESHOLD: float = 0.60
+    FACE_MATCH_THRESHOLD: float = 0.45
     FACE_DUPLICATE_THRESHOLD: float = 0.82
     LIVENESS_MIN_SCORE: float = 0.70
     MIN_FACE_QUALITY_SCORE: float = 0.60

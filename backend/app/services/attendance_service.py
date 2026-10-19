@@ -164,10 +164,14 @@ class AttendanceService:
         if not is_unique:
             raise HTTPException(status_code=400, detail=dup_msg)
 
+        from app.services.face_verification_service import get_insightface_app
+        model_name = "ArcFace-buffalo_s" if get_insightface_app() is not None else "Fallback-DCT-HOG"
+
         embedding_ref = json.dumps({
             "vector": vector,
+            "fallback_vector": vector,
             "dimension": len(vector),
-            "model_version": "ArcFace-buffalo_s",
+            "model_version": model_name,
             "sample_count": sample_count
         })
 
