@@ -1,32 +1,25 @@
-# Exclude frontend and mobile app from backend deployment
-frontend/
-android/
-*.apk
-*.aab
-
-# Docs and assets
-docs/
-scratch/
-database/
-*.md
-*.pdf
-*.xlsx
-
-# Local development databases and temporary files
-*.db
-*.sqlite3
+# Temporary local and cache files
 .pytest_cache/
 __pycache__/
 *.py[cod]
+.gradle/
+android/app/build/
+android/build/
+*.apk
+*.aab
 
-# Tests and backend seeds
-backend/tests/
-backend/.pytest_cache/
-backend/*.db
-backend/*.sqlite3
-backend/seed_data.py
-backend/seed_tasks.py
+# Local dev databases
+*.db
+*.sqlite3
 
-# Environment files
-.env*
+# Docs and scratch
+docs/
+scratch/
+database/
+*.pdf
+*.xlsx
+
+# Environment variables
+.env
+*.env
 !.env.example
