@@ -283,13 +283,8 @@ class AttendanceService:
                 detail=f"Attendance Restricted: Student enrollment status is '{student.enrollment_status}'. Only active registered students can mark attendance."
             )
 
-        # 2. Device Binding Check (if registered_device_id exists)
-        if student.registered_device_id and student.registered_device_id.strip():
-            if not device_fingerprint or device_fingerprint.strip() != student.registered_device_id.strip():
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Device Verification Failed: Punch must originate from your registered device ({student.registered_device_id})."
-                )
+        # 2. Device Binding Check: Removed requirement so students can log attendance from any device
+        # The device fingerprint is recorded in the audit log below for tracking without blocking.
 
         # 3. Face Baseline Registration & Consent Check
         face_tmpl = db.query(FaceTemplate).filter(
