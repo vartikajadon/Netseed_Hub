@@ -5,13 +5,20 @@ from app.configuration.config import settings
 
 # Import models so Base.metadata knows about all tables
 import app.models.all_models
+import logging
+from contextlib import asynccontextmanager
 from app.database.session import Base, engine
 from app.api_routes.router import api_router
 
-# Auto-create tables for local development database
-Base.metadata.create_all(bind=engine)
+logger = logging.getLogger(__name__)
 
-def ensure_db_columns():
+def run_db_setup():
+    """Safely runs DDL migrations and table creation without crashing startup."""
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        logger.warning(f"Base.metadata.create_all deferred or encountered error: {e}")
+
     from sqlalchemy import text
     statements = [
         "ALTER TABLE students ADD COLUMN IF NOT EXISTS dob DATE",
@@ -27,7 +34,6 @@ def ensure_db_columns():
                 conn.execute(text(stmt))
                 conn.commit()
         except Exception:
-            # Fallback for SQLite which doesn't support IF NOT EXISTS in ADD COLUMN
             try:
                 raw_stmt = stmt.replace(" IF NOT EXISTS", "")
                 with engine.connect() as conn:
@@ -36,14 +42,19 @@ def ensure_db_columns():
             except Exception:
                 pass
 
-ensure_db_columns()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Execute database setup safely during startup, never at top-level import
+    run_db_setup()
+    yield
 
 app = FastAPI(
     title=settings.APP_NAME,
     version="1.0.0",
     description="netSEED Hub Lifecycle Management Platform API Engine",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan
 )
 
 # CORS Configuration
@@ -78,8 +89,18 @@ def root():
 
 @app.get("/health", tags=["Health"])
 def health_check():
+    db_status = "unknown"
+    try:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        db_status = "connected"
+    except Exception as e:
+        db_status = f"disconnected: {str(e)}"
+
     return {
         "status": "healthy",
+        "database": db_status,
         "app_name": settings.APP_NAME,
         "environment": settings.ENVIRONMENT
     }

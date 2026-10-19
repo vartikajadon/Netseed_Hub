@@ -13,7 +13,11 @@ from app.configuration.config import settings
 logger = logging.getLogger(__name__)
 
 # Initialize Haar Cascade as fast detector & fallback
-HAAR_CASCADE = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+try:
+    HAAR_CASCADE = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+except Exception as e:
+    logger.warning(f"Haar Cascade detector initialization deferred or unavailable: {e}")
+    HAAR_CASCADE = None
 
 # Global InsightFace App instance (lazy-loaded on first call)
 _INSIGHTFACE_APP = None
@@ -103,20 +107,24 @@ class FaceVerificationService:
 
         # 2. Robust Haar Cascade Fallback
         gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
-        faces = HAAR_CASCADE.detectMultiScale(
-            gray,
-            scaleFactor=1.1,
-            minNeighbors=4,
-            minSize=(30, 30)
-        )
+        if HAAR_CASCADE is not None:
+            try:
+                faces = HAAR_CASCADE.detectMultiScale(
+                    gray,
+                    scaleFactor=1.1,
+                    minNeighbors=4,
+                    minSize=(30, 30)
+                )
 
-        for (x, y, fw, fh) in faces:
-            detected.append({
-                "bbox": (int(x), int(y), int(fw), int(fh)),
-                "confidence": 0.90,
-                "insight_face": None,
-                "method": "HAAR_CASCADE"
-            })
+                for (x, y, fw, fh) in faces:
+                    detected.append({
+                        "bbox": (int(x), int(y), int(fw), int(fh)),
+                        "confidence": 0.90,
+                        "insight_face": None,
+                        "method": "HAAR_CASCADE"
+                    })
+            except Exception as e:
+                logger.debug(f"Haar Cascade detection skipped: {e}")
 
         # 3. If neither detector found faces on synthetic/test image, check center face presence
         if not detected:

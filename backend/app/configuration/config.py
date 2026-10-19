@@ -2,7 +2,21 @@ import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DEFAULT_DB_FILE = os.path.join(BASE_DIR, "backend", "netlink_dev.db")
+IS_SERVERLESS = os.environ.get("VERCEL") == "1" or "AWS_LAMBDA_FUNCTION_NAME" in os.environ
+
+if IS_SERVERLESS:
+    DEFAULT_DB_FILE = "/tmp/netlink_dev.db"
+    # Copy pre-existing SQLite database to /tmp if it exists and /tmp DB doesn't exist
+    bundled_db = os.path.join(BASE_DIR, "backend", "netlink_dev.db")
+    if not os.path.exists(DEFAULT_DB_FILE) and os.path.exists(bundled_db):
+        try:
+            import shutil
+            shutil.copyfile(bundled_db, DEFAULT_DB_FILE)
+        except Exception:
+            pass
+else:
+    DEFAULT_DB_FILE = os.path.join(BASE_DIR, "backend", "netlink_dev.db")
+
 # Normalize backslashes for SQLite URI on Windows
 SQLITE_DEFAULT_URL = f"sqlite:///{DEFAULT_DB_FILE.replace('\\', '/')}"
 
