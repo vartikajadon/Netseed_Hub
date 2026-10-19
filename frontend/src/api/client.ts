@@ -3,6 +3,11 @@
 export const FIXED_BACKEND_API_URL = 'https://netseed-hub.vercel.app/api/v1';
 
 export function getApiBaseUrl(): string {
+  // If running locally in development, target local backend API engine
+  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    return 'http://localhost:8000/api/v1';
+  }
+
   // If an environment variable is explicitly supplied (e.g. at build or in deployment), respect it
   const envUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
   if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {

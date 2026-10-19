@@ -24,6 +24,7 @@ else:
 
     if "pooler.supabase.com" in db_url or os.environ.get("VERCEL") == "1" or "AWS_LAMBDA_FUNCTION_NAME" in os.environ:
         engine_kwargs["poolclass"] = NullPool
+        connect_args["prepare_threshold"] = None
 
 engine = create_engine(
     db_url,
