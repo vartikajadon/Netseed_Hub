@@ -1339,7 +1339,7 @@ export const AdminDashboard: React.FC = () => {
               <div className="space-y-6">
                 <Card
                   title="Security & Fraud Anomaly Monitoring"
-                  subtitle="Real-time detection of unregistered devices, geofence violations, and biometric mismatches"
+                  subtitle="Real-time detection of security anomalies, geofence violations, and biometric mismatches"
                   action={
                     <Badge variant={securityData.critical_count > 0 ? 'error' : 'success'}>
                       {securityData.total_alerts} Total Alerts

@@ -32,7 +32,7 @@ class AttendancePunchRequest(BaseModel):
     gps_accuracy_meters: Optional[float] = Field(None, description="Reported GPS accuracy radius in meters from browser Geolocation")
     challenge_token: str = Field(..., description="Active liveness challenge token")
     liveness_proof_base64: Optional[str] = Field(None, description="Live facial snapshot or liveness challenge proof")
-    device_fingerprint: Optional[str] = Field(None, description="Registered device hardware fingerprint")
+    device_fingerprint: Optional[str] = Field(None, description="Optional device hardware fingerprint (no device registration required)")
 
     @field_validator("event_type")
     @classmethod

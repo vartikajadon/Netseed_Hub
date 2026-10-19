@@ -260,7 +260,7 @@ class AttendanceService:
         """
         Server-Side Attendance Validation Flow:
         1. Authenticate user & verify student is active.
-        2. Verify registered device binding (if configured).
+        2. No registered device requirement (students can log in and punch from any device/browser).
         3. Verify face baseline enrollment & biometric consent.
         4. Validate face liveness & ArcFace recognition against enrolled template.
         5. Validate GPS accuracy (<= 50m).
@@ -283,8 +283,8 @@ class AttendanceService:
                 detail=f"Attendance Restricted: Student enrollment status is '{student.enrollment_status}'. Only active registered students can mark attendance."
             )
 
-        # 2. Device Binding Check: Removed requirement so students can log attendance from any device
-        # The device fingerprint is recorded in the audit log below for tracking without blocking.
+        # 2. Registered Device Requirement: Fully removed.
+        # Students and trainees are free to login and mark attendance (punch IN / OUT) from any device or browser without device registration or HR approval.
 
         # 3. Face Baseline Registration & Consent Check
         face_tmpl = db.query(FaceTemplate).filter(
