@@ -12,8 +12,14 @@ from app.api_routes.router import api_router
 
 logger = logging.getLogger(__name__)
 
+_setup_completed = False
+
 def run_db_setup():
     """Safely runs DDL migrations and table creation without crashing startup."""
+    global _setup_completed
+    if _setup_completed:
+        return
+
     try:
         Base.metadata.create_all(bind=engine)
     except Exception as e:
@@ -27,20 +33,92 @@ def run_db_setup():
         "ALTER TABLE students ADD COLUMN IF NOT EXISTS dropout_reason TEXT",
         "ALTER TABLE students ADD COLUMN IF NOT EXISTS dropout_date DATE",
         "ALTER TABLE students ADD COLUMN IF NOT EXISTS dropout_marked_by VARCHAR(36)",
+        """CREATE TABLE IF NOT EXISTS assessments (
+            id VARCHAR(36) PRIMARY KEY,
+            title VARCHAR(255) NOT NULL,
+            description TEXT,
+            level VARCHAR(50) NOT NULL DEFAULT 'ENTRY_LEVEL',
+            batch_id VARCHAR(36) NOT NULL,
+            mentor_id VARCHAR(36),
+            scheduled_date TIMESTAMP NOT NULL,
+            duration_minutes INTEGER NOT NULL DEFAULT 60,
+            total_marks INTEGER NOT NULL DEFAULT 100,
+            passing_marks INTEGER NOT NULL DEFAULT 40,
+            paper_content TEXT,
+            paper_file_url TEXT,
+            paper_file_name VARCHAR(255),
+            is_unlocked BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS assessment_submissions (
+            id VARCHAR(36) PRIMARY KEY,
+            assessment_id VARCHAR(36) NOT NULL,
+            student_id VARCHAR(36) NOT NULL,
+            submission_link VARCHAR(500) NOT NULL,
+            submission_notes TEXT,
+            answer_file_url TEXT,
+            answer_file_name VARCHAR(255),
+            status VARCHAR(50) NOT NULL DEFAULT 'SUBMITTED',
+            marks_obtained NUMERIC(5, 2),
+            feedback TEXT,
+            evaluated_by VARCHAR(36),
+            evaluated_at TIMESTAMP,
+            submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS project_url VARCHAR(500)",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS certificate_approved_by_mentor BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS certificate_approved_at TIMESTAMP",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS certificate_approved_by VARCHAR(36)",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS passout_year INTEGER",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS cv_url TEXT",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS cv_file_name VARCHAR(255)",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS cv_updated_at TIMESTAMP",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS project_title VARCHAR(255)",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS project_description TEXT",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS project_status VARCHAR(50) DEFAULT 'NOT_ASSIGNED'",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS project_assigned_at TIMESTAMP",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS project_submitted_at TIMESTAMP",
+        """CREATE TABLE IF NOT EXISTS trainer_feedbacks (
+            id VARCHAR(36) PRIMARY KEY,
+            student_id VARCHAR(36),
+            trainer_id VARCHAR(36) NOT NULL,
+            batch_id VARCHAR(36),
+            is_anonymous BOOLEAN NOT NULL DEFAULT FALSE,
+            technical_rating INTEGER,
+            technical_text TEXT,
+            teaching_rating INTEGER,
+            teaching_text TEXT,
+            doubt_solving_rating INTEGER,
+            doubt_solving_text TEXT,
+            practical_guidance_rating INTEGER,
+            practical_guidance_text TEXT,
+            communication_rating INTEGER,
+            communication_text TEXT,
+            overall_feedback_text TEXT,
+            average_rating NUMERIC(3, 2),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
     ]
-    for stmt in statements:
-        try:
-            with engine.connect() as conn:
-                conn.execute(text(stmt))
-                conn.commit()
-        except Exception:
-            try:
-                raw_stmt = stmt.replace(" IF NOT EXISTS", "")
-                with engine.connect() as conn:
-                    conn.execute(text(raw_stmt))
+
+    try:
+        with engine.connect() as conn:
+            for stmt in statements:
+                try:
+                    conn.execute(text(stmt))
                     conn.commit()
-            except Exception:
-                pass
+                except Exception:
+                    try:
+                        raw_stmt = stmt.replace(" IF NOT EXISTS", "")
+                        conn.execute(text(raw_stmt))
+                        conn.commit()
+                    except Exception:
+                        pass
+        _setup_completed = True
+    except Exception as e:
+        logger.warning(f"Database setup connection warning: {e}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

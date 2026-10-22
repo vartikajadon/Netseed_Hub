@@ -2,7 +2,7 @@ import uuid
 import json
 from datetime import datetime
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File, Form
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
@@ -16,6 +16,7 @@ from app.schemas.curriculum_schemas import (
     CurriculumTopicCreate, CurriculumTopicUpdate,
     CurriculumImportRequest, CurriculumPublishPayload
 )
+from app.services.curriculum_doc_parser import parse_curriculum_doc
 
 router = APIRouter(prefix="/curriculum", tags=["Course Curriculum & Progress Tracking"])
 
@@ -218,6 +219,147 @@ def publish_program_curriculum(
     return build_program_curriculum_response(program, None, db, viewer_role=current_user.role)
 
 
+@router.post("/parse-doc")
+async def parse_curriculum_doc_file(
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_role(["HR", "SUPER_ADMIN"]))
+):
+    """
+    Parses an uploaded Word Document (.docx or .doc) and extracts structured curriculum modules & topics.
+    Strictly accepts only doc type files (.docx, .doc).
+    """
+    filename = (file.filename or "").lower()
+    if not (filename.endswith(".docx") or filename.endswith(".doc")):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file format. Only Word document files (.docx, .doc) are supported for curriculum import."
+        )
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded document file is empty.")
+
+    try:
+        topics = parse_curriculum_doc(content, filename)
+        return {
+            "filename": file.filename,
+            "total_topics": len(topics),
+            "topics": topics
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to parse document: {str(e)}")
+
+
+@router.post("/programs/{program_id}/import-doc", response_model=ProgramCurriculumResponse)
+async def import_program_curriculum_from_doc(
+    program_id: str,
+    file: UploadFile = File(...),
+    replace_existing: bool = Form(True),
+    new_program_title: Optional[str] = Form(None),
+    new_program_code: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["HR", "SUPER_ADMIN"]))
+):
+    """
+    Accurately creates or replaces a curriculum directly from an imported Word Document (.docx or .doc).
+    If program_id == 'new' or new_program_title is provided, creates a brand new Program & Curriculum.
+    """
+    filename = (file.filename or "").lower()
+    if not (filename.endswith(".docx") or filename.endswith(".doc")):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file format. Only Word document files (.docx, .doc) are supported for curriculum import."
+        )
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded document file is empty.")
+
+    try:
+        topics_data = parse_curriculum_doc(content, filename)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Could not parse document: {str(e)}")
+
+    if not topics_data:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No structured curriculum topics detected in this document.")
+
+    # Check if creating a new program or updating an existing one
+    if program_id == "new" or new_program_title:
+        clean_base = file.filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ")
+        title = (new_program_title or f"Curriculum: {clean_base}").strip()
+        code = (new_program_code or f"PRG-{str(uuid.uuid4())[:8].upper()}").strip()
+
+        existing_prog = db.query(Program).filter(Program.code == code).first()
+        if existing_prog:
+            code = f"{code}-{str(uuid.uuid4())[:4].upper()}"
+
+        program = Program(
+            id=str(uuid.uuid4()),
+            title=title,
+            code=code,
+            description=f"Curriculum imported from document '{file.filename}'",
+            duration_weeks=12,
+            is_active=True,
+            created_by=current_user.id,
+            created_at=datetime.utcnow()
+        )
+        setattr(program, "is_curriculum_published", True)
+        db.add(program)
+        db.flush()
+    else:
+        program = db.query(Program).filter(Program.id == program_id).first()
+        if not program:
+            raise HTTPException(status_code=404, detail="Program not found.")
+
+        if replace_existing:
+            db.query(CurriculumTopic).filter(CurriculumTopic.program_id == program.id).delete(synchronize_session=False)
+
+    existing_max = db.query(CurriculumTopic.order_index)\
+        .filter(CurriculumTopic.program_id == program.id)\
+        .order_by(CurriculumTopic.order_index.desc())\
+        .first()
+    current_order = (existing_max[0] if existing_max and not replace_existing else 0)
+
+    imported_topics = []
+    for item in topics_data:
+        current_order += 1
+        new_topic = CurriculumTopic(
+            id=str(uuid.uuid4()),
+            program_id=program.id,
+            module_name=item["module_name"].strip(),
+            title=item["title"].strip(),
+            description=item.get("description"),
+            order_index=item.get("order_index") if item.get("order_index") is not None else current_order,
+            created_at=datetime.utcnow()
+        )
+        db.add(new_topic)
+        imported_topics.append(new_topic)
+
+    audit = AuditLog(
+        id=str(uuid.uuid4()),
+        actor_id=current_user.id,
+        action="IMPORT_CURRICULUM_DOC",
+        entity="Program",
+        entity_id=program.id,
+        new_values=json.dumps({
+            "program_id": program.id,
+            "program_title": program.title,
+            "filename": file.filename,
+            "topics_count": len(imported_topics),
+            "replace_existing": replace_existing,
+            "imported_by": current_user.full_name
+        }),
+        timestamp=datetime.utcnow()
+    )
+    db.add(audit)
+    db.commit()
+    db.refresh(program)
+
+    return build_program_curriculum_response(program, None, db, viewer_role=current_user.role)
+
+
 @router.post("/programs/{program_id}/import", response_model=ProgramCurriculumResponse)
 def import_program_curriculum(
     program_id: str,
@@ -226,26 +368,48 @@ def import_program_curriculum(
     current_user: User = Depends(require_role(["HR", "SUPER_ADMIN"]))
 ):
     """
-    Bulk import curriculum topics for a program from CSV or JSON.
-    Optionally replaces existing topics or appends to them.
+    Bulk import curriculum topics into an existing program or create a new curriculum program.
+    Accurately maps topics according to imported payload.
     """
-    program = db.query(Program).filter(Program.id == program_id).first()
-    if not program:
-        raise HTTPException(status_code=404, detail="Program not found.")
-
     if not payload.topics:
         raise HTTPException(status_code=400, detail="Cannot import empty curriculum topic list.")
 
-    if payload.replace_existing:
-        # Delete existing topics for this program
-        db.query(CurriculumTopic).filter(CurriculumTopic.program_id == program.id).delete(synchronize_session=False)
+    if program_id == "new" or payload.new_program_title:
+        title = (payload.new_program_title or "New Imported Curriculum").strip()
+        code = (payload.new_program_code or f"PRG-{str(uuid.uuid4())[:8].upper()}").strip()
+
+        existing_prog = db.query(Program).filter(Program.code == code).first()
+        if existing_prog:
+            code = f"{code}-{str(uuid.uuid4())[:4].upper()}"
+
+        program = Program(
+            id=str(uuid.uuid4()),
+            title=title,
+            code=code,
+            description="Imported curriculum program",
+            duration_weeks=12,
+            is_active=True,
+            created_by=current_user.id,
+            created_at=datetime.utcnow()
+        )
+        setattr(program, "is_curriculum_published", True)
+        db.add(program)
+        db.flush()
+    else:
+        program = db.query(Program).filter(Program.id == program_id).first()
+        if not program:
+            raise HTTPException(status_code=404, detail="Program not found.")
+
+        if payload.replace_existing:
+            # Delete existing topics for this program
+            db.query(CurriculumTopic).filter(CurriculumTopic.program_id == program.id).delete(synchronize_session=False)
 
     # Determine starting order index
     existing_max_order = db.query(CurriculumTopic.order_index)\
         .filter(CurriculumTopic.program_id == program.id)\
         .order_by(CurriculumTopic.order_index.desc())\
         .first()
-    current_order = (existing_max_order[0] if existing_max_order else 0)
+    current_order = (existing_max_order[0] if existing_max_order and not payload.replace_existing else 0)
 
     imported_topics = []
     for item in payload.topics:
@@ -271,6 +435,7 @@ def import_program_curriculum(
         entity_id=program.id,
         new_values=json.dumps({
             "program_id": program.id,
+            "program_title": program.title,
             "imported_count": len(imported_topics),
             "replace_existing": payload.replace_existing,
             "imported_by": current_user.full_name
@@ -282,6 +447,7 @@ def import_program_curriculum(
     db.refresh(program)
 
     return build_program_curriculum_response(program, None, db, viewer_role=current_user.role)
+
 
 
 @router.post("/programs/{program_id}/topics", response_model=TopicItemResponse)

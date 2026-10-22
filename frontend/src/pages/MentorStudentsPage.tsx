@@ -10,7 +10,7 @@ import { MentorFeedbackModal } from '../components/MentorFeedbackModal';
 import { api } from '../api/client';
 import { Student, Batch, PaginatedStudentList, MentorFeedbackItem } from '../types';
 import {
-  Users, Search, MessageSquare, PlusCircle, Star, Filter, RefreshCw
+  Users, Search, MessageSquare, PlusCircle, Star, Filter, RefreshCw, FileText
 } from 'lucide-react';
 
 export const MentorStudentsPage: React.FC = () => {
@@ -130,6 +130,14 @@ export const MentorStudentsPage: React.FC = () => {
       ),
     },
     {
+      header: 'Passout Year',
+      accessor: (item) => (
+        <span className="font-mono text-xs font-semibold text-slate-700 dark:text-slate-300">
+          {item.passout_year || 'N/A'}
+        </span>
+      ),
+    },
+    {
       header: 'Status',
       accessor: (item) => {
         const isDropout = item.enrollment_status === 'DROPOUT' || item.enrollment_status === 'DROPPED';
@@ -198,15 +206,41 @@ export const MentorStudentsPage: React.FC = () => {
     {
       header: 'Actions',
       accessor: (item) => (
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => handleOpenFeedback(item.id)}
-          className="text-xs font-semibold hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400"
-        >
-          <MessageSquare className="w-3 h-3 mr-1 text-indigo-600 dark:text-indigo-400" />
-          Give Feedback
-        </Button>
+        <div className="flex items-center gap-1.5">
+          {item.cv_url && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (item.cv_url) {
+                  const win = window.open();
+                  if (win) {
+                    win.document.write(
+                      `<iframe src="${item.cv_url}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`
+                    );
+                    win.document.title = `${item.user?.full_name || item.roll_number}_CV`;
+                  } else {
+                    window.open(item.cv_url, '_blank');
+                  }
+                }
+              }}
+              title="View Trainee Resume"
+              className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:border-indigo-500"
+            >
+              <FileText className="w-3 h-3 mr-1" />
+              CV
+            </Button>
+          )}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => handleOpenFeedback(item.id)}
+            className="text-xs font-semibold hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400"
+          >
+            <MessageSquare className="w-3 h-3 mr-1 text-indigo-600 dark:text-indigo-400" />
+            Feedback
+          </Button>
+        </div>
       ),
     },
   ];

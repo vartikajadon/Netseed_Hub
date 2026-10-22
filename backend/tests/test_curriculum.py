@@ -211,3 +211,76 @@ def test_student_cannot_import_or_publish_curriculum(client):
     )
     assert pub_res.status_code == 403
 
+
+def test_parse_curriculum_doc_file_success(client):
+    import io
+    import docx
+
+    doc = docx.Document()
+    doc.add_heading("Module 1: Cloud Architecture", level=1)
+    doc.add_paragraph("1. Microservices Basics - Decoupled architectures and container orchestration.")
+    doc.add_paragraph("2. API Gateways - Routing, rate limiting, and auth token validation.")
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+
+    files = {"file": ("cloud_curriculum.docx", buf.getvalue(), "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
+    res = client.post("/api/v1/curriculum/parse-doc", files=files, headers=HR_HEADERS)
+    assert res.status_code == 200, res.text
+    data = res.json()
+    assert data["total_topics"] == 2
+    assert data["topics"][0]["module_name"] == "Module 1: Cloud Architecture"
+    assert data["topics"][0]["title"] == "Microservices Basics"
+    assert "Decoupled architectures" in data["topics"][0]["description"]
+
+
+def test_parse_curriculum_doc_file_rejects_non_doc(client):
+    # Attempting to upload a CSV file instead of doc/docx
+    files = {"file": ("curriculum.csv", b"Module,Title,Description\nM1,T1,D1", "text/csv")}
+    res = client.post("/api/v1/curriculum/parse-doc", files=files, headers=HR_HEADERS)
+    assert res.status_code == 400
+    assert "Only Word document files (.docx, .doc) are supported" in res.json()["detail"]
+
+
+def test_import_curriculum_from_doc_creates_new_program(client):
+    import io
+    import docx
+
+    doc = docx.Document()
+    tbl = doc.add_table(rows=1, cols=3)
+    tbl.rows[0].cells[0].text = "Module"
+    tbl.rows[0].cells[1].text = "Topic Title"
+    tbl.rows[0].cells[2].text = "Description"
+
+    r1 = tbl.add_row().cells
+    r1[0].text = "Module 1: DevOps"
+    r1[1].text = "Docker Fundamentals"
+    r1[2].text = "Containerization and Dockerfile authoring"
+
+    r2 = tbl.add_row().cells
+    r2[0].text = "Module 1: DevOps"
+    r2[1].text = "Kubernetes Clusters"
+    r2[2].text = "Pods, services, and ingress deployment"
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+
+    files = {"file": ("devops_track.docx", buf.getvalue(), "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
+    data = {
+        "replace_existing": "true",
+        "new_program_title": "DevOps Engineering Specialization",
+        "new_program_code": "PRG-DEVOPS-2026"
+    }
+
+    res = client.post("/api/v1/curriculum/programs/new/import-doc", files=files, data=data, headers=HR_HEADERS)
+    assert res.status_code == 200, res.text
+    res_data = res.json()
+    assert res_data["program_title"] == "DevOps Engineering Specialization"
+    assert res_data["program_code"] == "PRG-DEVOPS-2026"
+    assert res_data["total_topics"] == 2
+    assert res_data["topics"][0]["title"] == "Docker Fundamentals"
+    assert res_data["topics"][1]["title"] == "Kubernetes Clusters"
+
+

@@ -85,6 +85,16 @@ export interface Student {
   dropout_marked_by?: string | null;
   registered_device_id?: string | null;
   face_enrollment_status: 'NOT_ENROLLED' | 'PENDING' | 'ENROLLED';
+  passout_year?: number | null;
+  cv_url?: string | null;
+  cv_file_name?: string | null;
+  cv_updated_at?: string | null;
+  project_title?: string | null;
+  project_description?: string | null;
+  project_status?: string | null;
+  project_url?: string | null;
+  project_assigned_at?: string | null;
+  project_submitted_at?: string | null;
   user?: User | null;
   program?: Program | null;
   batch?: Batch | null;
@@ -1066,6 +1076,185 @@ export interface CurriculumImportPayload {
 export interface CurriculumPublishPayload {
   is_published: boolean;
 }
+
+// -------------------------------------------------------------
+// Assessment Lifecycle Types
+// -------------------------------------------------------------
+export type AssessmentLevel = 'ENTRY_LEVEL' | 'MIDDLE_LEVEL' | 'EXIT_LEVEL';
+
+export interface Assessment {
+  id: string;
+  title: string;
+  description?: string | null;
+  level: AssessmentLevel;
+  batch_id: string;
+  batch_name?: string | null;
+  mentor_id?: string | null;
+  mentor_name?: string | null;
+  scheduled_date: string;
+  duration_minutes: number;
+  total_marks: number;
+  passing_marks: number;
+  paper_content?: string | null;
+  paper_file_url?: string | null;
+  paper_file_name?: string | null;
+  is_unlocked: boolean;
+  is_visible_to_student: boolean;
+  can_attempt: boolean;
+  submission_count: number;
+  has_submitted?: boolean;
+  my_submission?: {
+    id: string;
+    submission_link: string;
+    submission_notes?: string | null;
+    status: string;
+    marks_obtained?: number | null;
+    total_marks: number;
+    passing_marks: number;
+    feedback?: string | null;
+    submitted_at?: string | null;
+    evaluated_at?: string | null;
+  } | null;
+  created_at: string;
+}
+
+export interface AssessmentCreatePayload {
+  title: string;
+  description?: string;
+  level: AssessmentLevel;
+  batch_id: string;
+  scheduled_date: string;
+  duration_minutes: number;
+  total_marks: number;
+  passing_marks: number;
+  paper_content?: string;
+  paper_file_url?: string;
+  paper_file_name?: string;
+}
+
+export interface AssessmentSubmission {
+  id: string;
+  assessment_id: string;
+  assessment_title: string;
+  assessment_level: AssessmentLevel;
+  batch_id?: string | null;
+  batch_name?: string | null;
+  student_id: string;
+  student_name: string;
+  student_roll_no: string;
+  student_email?: string | null;
+  submission_link: string;
+  submission_notes?: string | null;
+  answer_file_url?: string | null;
+  answer_file_name?: string | null;
+  status: 'SUBMITTED' | 'EVALUATED';
+  marks_obtained?: number | null;
+  total_marks: number;
+  passing_marks: number;
+  is_passed?: boolean | null;
+  feedback?: string | null;
+  evaluated_by_name?: string | null;
+  evaluated_at?: string | null;
+  submitted_at: string;
+}
+
+export interface ScoreSheetAssessmentEntry {
+  assessment_id: string;
+  title: string;
+  status: string;
+  marks_obtained?: number | null;
+  total_marks: number;
+  passing_marks: number;
+  is_passed?: boolean | null;
+  feedback?: string | null;
+  submission_link?: string | null;
+  scheduled_date?: string | null;
+  submitted_at?: string | null;
+  evaluated_at?: string | null;
+}
+
+export interface ScoreSheetRow {
+  student_id: string;
+  student_name: string;
+  roll_number: string;
+  batch_id: string;
+  batch_name: string;
+  project_url?: string | null;
+  certificate_approved_by_mentor: boolean;
+  certificate_approved_at?: string | null;
+  certificate_approved_by_name?: string | null;
+  entry_level?: ScoreSheetAssessmentEntry | null;
+  middle_level?: ScoreSheetAssessmentEntry | null;
+  exit_level?: ScoreSheetAssessmentEntry | null;
+  total_obtained: number;
+  total_max: number;
+  percentage: number;
+  final_status: 'PASSED' | 'FAILED' | 'IN_PROGRESS' | 'NOT_STARTED';
+}
+
+export interface TrainerFeedbackItem {
+  id: string;
+  student_id?: string | null;
+  student_name: string;
+  student_roll_no?: string | null;
+  trainer_id: string;
+  trainer_name: string;
+  batch_id?: string | null;
+  batch_name?: string | null;
+  is_anonymous: boolean;
+  technical_rating?: number | null;
+  technical_text?: string | null;
+  teaching_rating?: number | null;
+  teaching_text?: string | null;
+  doubt_solving_rating?: number | null;
+  doubt_solving_text?: string | null;
+  practical_guidance_rating?: number | null;
+  practical_guidance_text?: string | null;
+  communication_rating?: number | null;
+  communication_text?: string | null;
+  overall_feedback_text?: string | null;
+  average_rating?: number | null;
+  created_at: string;
+}
+
+export interface TrainerOption {
+  id: string;
+  full_name: string;
+  email: string;
+  role: string;
+  batch_id?: string | null;
+  batch_name?: string | null;
+}
+
+export interface ProjectStudentItem {
+  student_id: string;
+  student_name: string;
+  student_email?: string | null;
+  roll_number: string;
+  batch_id: string;
+  batch_name: string;
+  passout_year?: number | null;
+  cv_url?: string | null;
+  cv_file_name?: string | null;
+  cv_updated_at?: string | null;
+  project_title?: string | null;
+  project_description?: string | null;
+  project_status: string;
+  project_url?: string | null;
+  project_assigned_at?: string | null;
+  project_submitted_at?: string | null;
+}
+
+export interface ProjectBatchResponse {
+  batch_id: string;
+  batch_name: string;
+  total_students: number;
+  assigned_count: number;
+  submitted_count: number;
+  students: ProjectStudentItem[];
+}
+
+
 
 
 

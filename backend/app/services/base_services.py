@@ -670,7 +670,12 @@ class StudentService:
             dob=data.dob,
             enrollment_status=status_val,
             registered_device_id=data.registered_device_id,
-            face_enrollment_status=data.face_enrollment_status
+            face_enrollment_status=data.face_enrollment_status,
+            passout_year=data.passout_year,
+            cv_url=data.cv_url,
+            cv_file_name=data.cv_file_name,
+            project_title=data.project_title,
+            project_description=data.project_description
         )
         created = self.repo.create(student)
         sync_student_birthday_event(self.repo.db, created)
@@ -755,6 +760,21 @@ class StudentService:
             student.dob = data.dob
         if data.enrollment_status is not None:
             student.enrollment_status = data.enrollment_status
+        if data.passout_year is not None:
+            student.passout_year = data.passout_year
+        if data.cv_url is not None:
+            student.cv_url = data.cv_url
+            student.cv_updated_at = datetime.utcnow()
+        if data.cv_file_name is not None:
+            student.cv_file_name = data.cv_file_name
+        if data.project_title is not None:
+            student.project_title = data.project_title
+        if data.project_description is not None:
+            student.project_description = data.project_description
+        if data.project_status is not None:
+            student.project_status = data.project_status
+        if data.project_url is not None:
+            student.project_url = data.project_url
 
         updated = self.repo.update(student)
         sync_student_birthday_event(self.repo.db, updated)

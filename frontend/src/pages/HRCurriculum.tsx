@@ -62,12 +62,14 @@ export const HRCurriculum: React.FC = () => {
   const [topicOrderIndex, setTopicOrderIndex] = useState<number>(1);
   const [topicToDelete, setTopicToDelete] = useState<CurriculumTopicItem | null>(null);
 
-  // Import State
-  const [importMode, setImportMode] = useState<'FILE' | 'TEXT'>('FILE');
-  const [importFormat, setImportFormat] = useState<'CSV' | 'JSON'>('CSV');
-  const [importRawText, setImportRawText] = useState<string>('');
-  const [replaceExisting, setReplaceExisting] = useState<boolean>(false);
+  // Import State (Doc type file only: .docx / .doc)
+  const [selectedDocFile, setSelectedDocFile] = useState<File | null>(null);
+  const [importTargetMode, setImportTargetMode] = useState<'SELECTED' | 'NEW'>('SELECTED');
+  const [newProgramTitle, setNewProgramTitle] = useState<string>('');
+  const [newProgramCode, setNewProgramCode] = useState<string>('');
+  const [replaceExisting, setReplaceExisting] = useState<boolean>(true);
   const [parsedPreviewTopics, setParsedPreviewTopics] = useState<CurriculumImportItem[]>([]);
+  const [isParsingDoc, setIsParsingDoc] = useState<boolean>(false);
   const [importParseError, setImportParseError] = useState<string | null>(null);
 
   // Load programs on mount
@@ -186,154 +188,125 @@ export const HRCurriculum: React.FC = () => {
   };
 
   // =========================================================================
-  // PARSE IMPORT DATA (CSV / JSON)
+  // PARSE WORD DOCUMENT (.docx / .doc ONLY)
   // =========================================================================
-  const parseCSV = (csvText: string): CurriculumImportItem[] => {
-    const lines = csvText.trim().split(/\r?\n/);
-    if (lines.length < 2) return [];
-
-    const headers = lines[0].split(',').map((h) => h.trim().toLowerCase());
-    const modIdx = headers.findIndex((h) => h.includes('module'));
-    const titleIdx = headers.findIndex((h) => h.includes('title') || h.includes('topic'));
-    const descIdx = headers.findIndex((h) => h.includes('desc'));
-    const orderIdx = headers.findIndex((h) => h.includes('order'));
-
-    const items: CurriculumImportItem[] = [];
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
-
-      // Simple regex for CSV splitting supporting quotes
-      const row = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map((val) =>
-        val.replace(/^"(.*)"$/, '$1').trim()
-      );
-
-      const moduleName = modIdx !== -1 && row[modIdx] ? row[modIdx] : 'Module 1';
-      const title = titleIdx !== -1 && row[titleIdx] ? row[titleIdx] : row[0] || `Topic ${i}`;
-      const description = descIdx !== -1 && row[descIdx] ? row[descIdx] : '';
-      const order = orderIdx !== -1 && row[orderIdx] ? parseInt(row[orderIdx], 10) || i : i;
-
-      if (title) {
-        items.push({
-          module_name: moduleName,
-          title,
-          description,
-          order_index: order,
-        });
-      }
-    }
-    return items;
-  };
-
-  const parseJSON = (jsonText: string): CurriculumImportItem[] => {
-    const parsed = JSON.parse(jsonText);
-    const list = Array.isArray(parsed) ? parsed : parsed.topics || [];
-    return list.map((item: any, idx: number) => ({
-      module_name: item.module_name || item.module || 'General',
-      title: item.title || item.topic || `Topic ${idx + 1}`,
-      description: item.description || item.desc || '',
-      order_index: item.order_index || idx + 1,
-    }));
-  };
-
-  const handleRawTextChange = (text: string) => {
-    setImportRawText(text);
-    setImportParseError(null);
-    if (!text.trim()) {
-      setParsedPreviewTopics([]);
-      return;
-    }
-
-    try {
-      if (importFormat === 'CSV') {
-        const parsed = parseCSV(text);
-        setParsedPreviewTopics(parsed);
-      } else {
-        const parsed = parseJSON(text);
-        setParsedPreviewTopics(parsed);
-      }
-    } catch (err: any) {
-      setImportParseError(err.message || 'Invalid format syntax.');
-      setParsedPreviewTopics([]);
-    }
-  };
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDocFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const isJson = file.name.endsWith('.json');
-    setImportFormat(isJson ? 'JSON' : 'CSV');
+    const lowerName = file.name.toLowerCase();
+    const isDoc = lowerName.endsWith('.docx') || lowerName.endsWith('.doc');
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result as string;
-      handleRawTextChange(content);
-    };
-    reader.readAsText(file);
+    if (!isDoc) {
+      setImportParseError('Invalid file type. Only Word document files (.docx, .doc) are supported for curriculum import.');
+      setSelectedDocFile(null);
+      setParsedPreviewTopics([]);
+      e.target.value = '';
+      return;
+    }
+
+    setSelectedDocFile(file);
+    setImportParseError(null);
+    setIsParsingDoc(true);
+
+    // Auto-populate suggested new program title and code if not provided
+    const baseName = file.name.replace(/\.[^/.]+$/, '').replace(/[_\-]+/g, ' ').trim();
+    if (!newProgramTitle) {
+      setNewProgramTitle(baseName);
+    }
+    if (!newProgramCode) {
+      const codeWord = baseName.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 6);
+      setNewProgramCode(`PRG-${codeWord || 'DOC'}`);
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await api.upload<{ filename: string; total_topics: number; topics: CurriculumImportItem[] }>(
+        '/curriculum/parse-doc',
+        formData
+      );
+
+      if (!res.topics || res.topics.length === 0) {
+        setImportParseError('No curriculum modules or topics could be detected in this Word document.');
+        setParsedPreviewTopics([]);
+      } else {
+        setParsedPreviewTopics(res.topics);
+        setImportParseError(null);
+      }
+    } catch (err: any) {
+      setImportParseError(err.message || 'Failed to parse Word document. Please ensure it contains structured curriculum modules and topics.');
+      setParsedPreviewTopics([]);
+    } finally {
+      setIsParsingDoc(false);
+    }
   };
 
-  // Submit Import
+  // Submit Import & Accurately Create Curriculum
   const handleConfirmImport = async () => {
     if (parsedPreviewTopics.length === 0) {
       addToast({
         type: 'error',
-        title: 'Empty Import',
-        message: 'No valid topics detected in import file or text.',
+        title: 'Empty Curriculum',
+        message: 'No valid topics detected in the imported document.',
+      });
+      return;
+    }
+
+    if (importTargetMode === 'NEW' && !newProgramTitle.trim()) {
+      addToast({
+        type: 'error',
+        title: 'Program Title Required',
+        message: 'Please provide a title for the new training program.',
       });
       return;
     }
 
     try {
       setIsActionLoading(true);
+      const targetId = importTargetMode === 'NEW' ? 'new' : selectedProgramId;
+      const payload: any = {
+        topics: parsedPreviewTopics,
+        replace_existing: replaceExisting,
+      };
+
+      if (importTargetMode === 'NEW') {
+        payload.new_program_title = newProgramTitle.trim();
+        payload.new_program_code = newProgramCode.trim() || `PRG-${Date.now().toString().slice(-6)}`;
+      }
+
       const res = await api.post<ProgramCurriculum>(
-        `/curriculum/programs/${selectedProgramId}/import`,
-        {
-          topics: parsedPreviewTopics,
-          replace_existing: replaceExisting,
-        }
+        `/curriculum/programs/${targetId}/import`,
+        payload
       );
+
+      // Refresh programs list
+      const updatedPrograms = await api.get<Program[]>('/programs');
+      setPrograms(updatedPrograms || []);
+      setSelectedProgramId(res.program_id);
       setCurriculum(res);
+
       setIsImportModalOpen(false);
-      setImportRawText('');
+      setSelectedDocFile(null);
       setParsedPreviewTopics([]);
+      setNewProgramTitle('');
+      setNewProgramCode('');
+
       addToast({
         type: 'success',
-        title: 'Curriculum Imported',
-        message: `Successfully imported ${parsedPreviewTopics.length} topics into ${currentProgram?.title}!`,
+        title: 'New Curriculum Created',
+        message: `Successfully created curriculum with ${res.total_topics} topics according to "${selectedDocFile?.name || 'document'}".`,
       });
     } catch (err: any) {
       addToast({
         type: 'error',
         title: 'Import Failed',
-        message: err.message || 'Failed to import curriculum topics.',
+        message: err.message || 'Failed to import curriculum from document.',
       });
     } finally {
       setIsActionLoading(false);
     }
-  };
-
-  // =========================================================================
-  // DOWNLOAD CSV SAMPLE TEMPLATE
-  // =========================================================================
-  const handleDownloadSample = () => {
-    const sampleCsv = `Module Name,Topic Title,Description,Order
-Frontend Architecture,React 18 & TypeScript Setup,Configuration of Vite with Tailwind and TypeScript strict mode,1
-Frontend Architecture,State Management & Context API,Building resilient global auth state and notification providers,2
-Backend Development,FastAPI REST Endpoints,Creating Pydantic V2 schemas and dependency injection guards,3
-Backend Development,SQLAlchemy ORM & Migrations,Designing normalized relational models with foreign keys,4
-Security & Biometrics,Haversine Geofencing Engine,Server-side great circle distance validation against venue,5
-Security & Biometrics,ArcFace Biometric Matching,512-dimensional facial embedding vector extraction,6
-DevOps & Cloud,Docker & Production Deployment,Containerizing FastAPI service with environment isolation,7`;
-
-    const blob = new Blob([sampleCsv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `${currentProgram?.code || 'program'}_curriculum_template.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   // =========================================================================
@@ -470,19 +443,14 @@ DevOps & Cloud,Docker & Production Deployment,Containerizing FastAPI service wit
           <div className="flex items-center flex-wrap gap-2.5 shrink-0">
             <Button
               variant="secondary"
-              onClick={handleDownloadSample}
-              className="text-xs py-2"
+              onClick={() => {
+                setImportParseError(null);
+                setIsImportModalOpen(true);
+              }}
+              className="text-xs py-2 border-indigo-200 dark:border-indigo-800 hover:border-indigo-400"
             >
-              <Download className="w-3.5 h-3.5 mr-1.5" />
-              CSV Template
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => setIsImportModalOpen(true)}
-              className="text-xs py-2"
-            >
-              <Upload className="w-3.5 h-3.5 mr-1.5" />
-              Import Curriculum
+              <Upload className="w-3.5 h-3.5 mr-1.5 text-indigo-600" />
+              Import Curriculum (.doc)
             </Button>
             <Button
               variant="primary"
@@ -831,133 +799,152 @@ DevOps & Cloud,Docker & Production Deployment,Containerizing FastAPI service wit
               </div>
             </div>
 
-            {/* Mode Tabs */}
-            <div className="flex border-b border-slate-200 dark:border-slate-800">
-              <button
-                type="button"
-                onClick={() => setImportMode('FILE')}
-                className={`py-2 px-4 text-xs font-bold border-b-2 transition-colors ${
-                  importMode === 'FILE'
-                    ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
-                    : 'border-transparent text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                Upload File (.csv / .json)
-              </button>
-              <button
-                type="button"
-                onClick={() => setImportMode('TEXT')}
-                className={`py-2 px-4 text-xs font-bold border-b-2 transition-colors ${
-                  importMode === 'TEXT'
-                    ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
-                    : 'border-transparent text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                Paste Raw CSV / JSON Text
-              </button>
-            </div>
+            {/* Target Program Selection */}
+            <div className="bg-slate-50 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 p-4 rounded-xl space-y-3">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                Curriculum Target
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <label
+                  className={`flex items-start gap-2.5 p-3 rounded-lg border cursor-pointer transition-colors ${
+                    importTargetMode === 'SELECTED'
+                      ? 'border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/30 text-indigo-900 dark:text-indigo-200'
+                      : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="importTargetMode"
+                    value="SELECTED"
+                    checked={importTargetMode === 'SELECTED'}
+                    onChange={() => setImportTargetMode('SELECTED')}
+                    className="mt-0.5 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <div className="text-xs">
+                    <p className="font-bold">Apply to Current Program</p>
+                    <p className="text-[11px] opacity-80 mt-0.5">{currentProgram?.title} ({currentProgram?.code})</p>
+                  </div>
+                </label>
 
-            {importMode === 'FILE' ? (
-              <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-8 text-center bg-slate-50/50 dark:bg-slate-800/30">
-                <Upload className="w-10 h-10 text-slate-400 mx-auto mb-2" />
-                <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                  Click or drag and drop CSV or JSON file
-                </p>
-                <p className="text-xs text-slate-500 mt-1 mb-4">
-                  Supports .csv and .json files
-                </p>
-                <input
-                  type="file"
-                  accept=".csv,.json"
-                  onChange={handleFileUpload}
-                  className="block mx-auto text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                />
+                <label
+                  className={`flex items-start gap-2.5 p-3 rounded-lg border cursor-pointer transition-colors ${
+                    importTargetMode === 'NEW'
+                      ? 'border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/30 text-indigo-900 dark:text-indigo-200'
+                      : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="importTargetMode"
+                    value="NEW"
+                    checked={importTargetMode === 'NEW'}
+                    onChange={() => setImportTargetMode('NEW')}
+                    className="mt-0.5 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <div className="text-xs">
+                    <p className="font-bold">+ Create Brand New Program</p>
+                    <p className="text-[11px] opacity-80 mt-0.5">Generate a new training track & curriculum</p>
+                  </div>
+                </label>
               </div>
-            ) : (
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-bold text-slate-600 dark:text-slate-400">
-                    Paste CSV or JSON content:
-                  </label>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setImportFormat('CSV');
-                        handleRawTextChange(importRawText);
-                      }}
-                      className={`text-xs px-2 py-0.5 rounded ${
-                        importFormat === 'CSV'
-                          ? 'bg-indigo-600 text-white font-bold'
-                          : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                      }`}
-                    >
-                      CSV
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setImportFormat('JSON');
-                        handleRawTextChange(importRawText);
-                      }}
-                      className={`text-xs px-2 py-0.5 rounded ${
-                        importFormat === 'JSON'
-                          ? 'bg-indigo-600 text-white font-bold'
-                          : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                      }`}
-                    >
-                      JSON
-                    </button>
+
+              {importTargetMode === 'NEW' ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200 dark:border-slate-800">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                      New Program Title *
+                    </label>
+                    <input
+                      type="text"
+                      value={newProgramTitle}
+                      onChange={(e) => setNewProgramTitle(e.target.value)}
+                      placeholder="e.g. Full Stack Engineering"
+                      className="w-full px-3 py-1.5 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                      Program Code
+                    </label>
+                    <input
+                      type="text"
+                      value={newProgramCode}
+                      onChange={(e) => setNewProgramCode(e.target.value.toUpperCase())}
+                      placeholder="e.g. PRG-FSE-2026"
+                      className="w-full px-3 py-1.5 text-xs font-mono bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    />
                   </div>
                 </div>
-                <textarea
-                  rows={6}
-                  value={importRawText}
-                  onChange={(e) => handleRawTextChange(e.target.value)}
-                  placeholder={
-                    importFormat === 'CSV'
-                      ? 'Module Name,Topic Title,Description,Order\nModule 1,HTML & CSS,Responsive design basics,1'
-                      : '[\n  {"module_name": "Module 1", "title": "HTML & CSS", "description": "Basics", "order_index": 1}\n]'
-                  }
-                  className="w-full p-3 text-xs font-mono bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                />
+              ) : (
+                <div className="flex items-center gap-2 pt-1 border-t border-slate-200 dark:border-slate-800">
+                  <input
+                    type="checkbox"
+                    id="replaceExistingCheckbox"
+                    checked={replaceExisting}
+                    onChange={(e) => setReplaceExisting(e.target.checked)}
+                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                  />
+                  <label
+                    htmlFor="replaceExistingCheckbox"
+                    className="text-xs font-medium text-slate-700 dark:text-slate-300 cursor-pointer"
+                  >
+                    Replace existing topics (Generates a clean curriculum matching document exactly)
+                  </label>
+                </div>
+              )}
+            </div>
+
+            {/* Document Upload Area (Doc Only) */}
+            <div className="border-2 border-dashed border-indigo-200 dark:border-indigo-900/60 rounded-xl p-6 text-center bg-indigo-50/20 dark:bg-slate-900/40 relative">
+              <FileText className="w-10 h-10 text-indigo-500 mx-auto mb-2" />
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                {selectedDocFile ? selectedDocFile.name : 'Choose or Drag & Drop Word Document'}
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-4">
+                Strictly accepts Word document files (<span className="font-semibold text-indigo-600 dark:text-indigo-400">.docx</span> and <span className="font-semibold text-indigo-600 dark:text-indigo-400">.doc</span> only)
+              </p>
+              <input
+                type="file"
+                accept=".docx,.doc,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                onChange={handleDocFileUpload}
+                disabled={isParsingDoc || isActionLoading}
+                className="block mx-auto text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 cursor-pointer"
+              />
+            </div>
+
+            {/* Document Parsing Progress Indicator */}
+            {isParsingDoc && (
+              <div className="p-4 bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 rounded-xl flex items-center justify-center gap-3 text-xs text-indigo-700 dark:text-indigo-300 font-medium">
+                <svg className="animate-spin h-5 w-5 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Accurately analyzing and extracting curriculum modules & topics from Word document...
               </div>
             )}
 
+            {/* Error Message */}
             {importParseError && (
-              <p className="text-xs font-semibold text-rose-600 flex items-center gap-1.5">
+              <p className="text-xs font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1.5 p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-lg">
                 <AlertCircle className="w-4 h-4 shrink-0" />
-                Parse Error: {importParseError}
+                {importParseError}
               </p>
             )}
 
-            {/* Import Option: Replace Existing */}
-            <div className="flex items-center gap-2 pt-1">
-              <input
-                type="checkbox"
-                id="replaceExistingCheckbox"
-                checked={replaceExisting}
-                onChange={(e) => setReplaceExisting(e.target.checked)}
-                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4"
-              />
-              <label
-                htmlFor="replaceExistingCheckbox"
-                className="text-xs font-medium text-slate-700 dark:text-slate-300 cursor-pointer"
-              >
-                Replace existing curriculum topics for this program (Wipes current topics before importing)
-              </label>
-            </div>
-
             {/* Parsed Preview Table */}
-            {parsedPreviewTopics.length > 0 && (
-              <div className="mt-3">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+            {parsedPreviewTopics.length > 0 && !isParsingDoc && (
+              <div className="mt-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
                     <CheckCircle2 className="w-4 h-4" />
-                    Preview: {parsedPreviewTopics.length} Valid Topics Detected
+                    Accurately Extracted {parsedPreviewTopics.length} Topics across{' '}
+                    {new Set(parsedPreviewTopics.map((t) => t.module_name)).size} Modules
+                  </span>
+                  <span className="text-[11px] text-slate-500 font-mono">
+                    {selectedDocFile?.name}
                   </span>
                 </div>
-                <div className="max-h-52 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg">
+                <div className="max-h-56 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg shadow-inner">
                   <table className="w-full text-left text-xs">
                     <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 sticky top-0">
                       <tr>
@@ -968,23 +955,18 @@ DevOps & Cloud,Docker & Production Deployment,Containerizing FastAPI service wit
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {parsedPreviewTopics.slice(0, 10).map((pt, i) => (
+                      {parsedPreviewTopics.map((pt, i) => (
                         <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                           <td className="py-1.5 px-3 font-mono text-slate-500">{pt.order_index || i + 1}</td>
                           <td className="py-1.5 px-3 font-semibold text-slate-800 dark:text-slate-200">
                             {pt.module_name}
                           </td>
-                          <td className="py-1.5 px-3 text-slate-900 dark:text-slate-100">{pt.title}</td>
-                          <td className="py-1.5 px-3 text-slate-500 truncate max-w-xs">{pt.description}</td>
+                          <td className="py-1.5 px-3 text-slate-900 dark:text-slate-100 font-medium">{pt.title}</td>
+                          <td className="py-1.5 px-3 text-slate-500 dark:text-slate-400 truncate max-w-xs">{pt.description || '—'}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                  {parsedPreviewTopics.length > 10 && (
-                    <div className="p-2 bg-slate-50 dark:bg-slate-800/80 text-center text-xs text-slate-500 font-medium">
-                      + {parsedPreviewTopics.length - 10} more topics in this batch
-                    </div>
-                  )}
                 </div>
               </div>
             )}
@@ -992,18 +974,25 @@ DevOps & Cloud,Docker & Production Deployment,Containerizing FastAPI service wit
             <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
               <Button
                 variant="secondary"
-                onClick={() => setIsImportModalOpen(false)}
-                disabled={isActionLoading}
+                onClick={() => {
+                  setIsImportModalOpen(false);
+                  setSelectedDocFile(null);
+                  setParsedPreviewTopics([]);
+                  setImportParseError(null);
+                }}
+                disabled={isActionLoading || isParsingDoc}
               >
                 Cancel
               </Button>
               <Button
                 variant="primary"
                 onClick={handleConfirmImport}
-                disabled={isActionLoading || parsedPreviewTopics.length === 0}
+                disabled={isActionLoading || isParsingDoc || parsedPreviewTopics.length === 0}
                 className="bg-indigo-600 hover:bg-indigo-700"
               >
-                {isActionLoading ? 'Importing...' : `Confirm & Import ${parsedPreviewTopics.length} Topics`}
+                {isActionLoading
+                  ? 'Creating Curriculum...'
+                  : `Confirm & Create Curriculum (${parsedPreviewTopics.length} Topics)`}
               </Button>
             </div>
           </div>

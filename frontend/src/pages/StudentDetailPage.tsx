@@ -27,6 +27,8 @@ import {
   Save,
   Move,
   Cake,
+  FileText,
+  ExternalLink,
 } from 'lucide-react';
 
 export const StudentDetailPage: React.FC = () => {
@@ -217,7 +219,29 @@ export const StudentDetailPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {student.cv_url && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  if (student.cv_url) {
+                    const win = window.open();
+                    if (win) {
+                      win.document.write(
+                        `<iframe src="${student.cv_url}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`
+                      );
+                      win.document.title = `${student.user?.full_name || student.roll_number}_CV`;
+                    } else {
+                      window.open(student.cv_url, '_blank');
+                    }
+                  }
+                }}
+                className="text-indigo-600 dark:text-indigo-400 font-semibold"
+              >
+                <FileText className="w-3.5 h-3.5 mr-1" /> View CV
+              </Button>
+            )}
             <Button size="sm" variant="outline" onClick={() => setIsCalendarOpen(true)}>
               <Calendar className="w-3.5 h-3.5 mr-1 text-rose-600 dark:text-rose-400" /> Attendance Calendar
             </Button>
@@ -284,6 +308,13 @@ export const StudentDetailPage: React.FC = () => {
               <div>
                 <span className="text-xs text-slate-500 dark:text-slate-400 block font-medium">Degree Qualification</span>
                 <span className="text-slate-700 dark:text-slate-300">{student.qualification || 'N/A'}</span>
+              </div>
+
+              <div>
+                <span className="text-xs text-slate-500 dark:text-slate-400 block font-medium">Passout Year</span>
+                <span className="font-semibold text-slate-900 dark:text-slate-100 font-mono">
+                  {student.passout_year ? String(student.passout_year) : 'N/A'}
+                </span>
               </div>
 
               {student.domicile && (
@@ -496,6 +527,84 @@ export const StudentDetailPage: React.FC = () => {
               {/* Data Security Guarantee */}
               <div className="p-3 bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-500/20 rounded-xl text-[11px] text-indigo-900 dark:text-indigo-300 font-medium">
                 Data Security Guarantee: Raw biometric images and vector embeddings are encrypted and never exposed over public API endpoints.
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* Section 4: Resume & Academic Submissions */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card title="Curriculum Vitae (CV / Resume)" subtitle="Student Uploaded Resume for HR & Mentor Review">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3.5 bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-xl">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                    <FileText className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-slate-900 dark:text-slate-100 text-xs">
+                      {student.cv_file_name || (student.cv_url ? 'Resume_Document.pdf' : 'No CV Uploaded')}
+                    </div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                      {student.cv_updated_at ? `Uploaded ${new Date(student.cv_updated_at).toLocaleDateString()}` : 'Pending student upload'}
+                    </div>
+                  </div>
+                </div>
+                {student.cv_url ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      if (student.cv_url) {
+                        const win = window.open();
+                        if (win) {
+                          win.document.write(
+                            `<iframe src="${student.cv_url}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`
+                          );
+                          win.document.title = `${student.user?.full_name || student.roll_number}_CV`;
+                        } else {
+                          window.open(student.cv_url, '_blank');
+                        }
+                      }
+                    }}
+                    className="text-xs font-semibold text-indigo-600 dark:text-indigo-400"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 mr-1" /> View CV
+                  </Button>
+                ) : (
+                  <Badge variant="neutral">Not Uploaded</Badge>
+                )}
+              </div>
+            </div>
+          </Card>
+
+          <Card title="Assigned Capstone Project" subtitle="Mentor Assigned Topic & Student Submission">
+            <div className="space-y-3 text-xs">
+              <div>
+                <span className="text-slate-500 dark:text-slate-400 block font-medium">Project Title</span>
+                <span className="font-bold text-slate-900 dark:text-slate-100 text-sm">
+                  {student.project_title || 'No Project Assigned Yet'}
+                </span>
+              </div>
+              {student.project_description && (
+                <div className="text-slate-600 dark:text-slate-400 p-2.5 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
+                  {student.project_description}
+                </div>
+              )}
+              <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-800">
+                <span className="text-slate-500 dark:text-slate-400">Submission URL:</span>
+                {student.project_url ? (
+                  <a
+                    href={student.project_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-mono text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 font-bold"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" /> View Submitted Project
+                  </a>
+                ) : (
+                  <span className="text-slate-400 italic">Pending Student Submission</span>
+                )}
               </div>
             </div>
           </Card>

@@ -65,6 +65,8 @@ class CurriculumImportTopicPayload(BaseModel):
 class CurriculumImportRequest(BaseModel):
     topics: List[CurriculumImportTopicPayload]
     replace_existing: bool = False
+    new_program_title: Optional[str] = None
+    new_program_code: Optional[str] = None
 
 
 class CurriculumPublishPayload(BaseModel):

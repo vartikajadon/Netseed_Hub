@@ -18,9 +18,19 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(localStorage.getItem('access_token'));
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [user, setUser] = useState<User | null>(() => {
+    try {
+      const savedUser = localStorage.getItem('user_data');
+      return savedUser ? JSON.parse(savedUser) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('access_token'));
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    // If there is no token in localStorage, the user is unauthenticated: don't block
+    return !!localStorage.getItem('access_token');
+  });
 
   const isSupabaseConfigured = () => {
     const url = import.meta.env.VITE_SUPABASE_URL;
@@ -29,12 +39,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Restore & validate session on mount or token change
   const restoreSession = async () => {
-    setIsLoading(true);
     try {
       let activeToken: string | null = localStorage.getItem('access_token');
 
-      // 1. Check Supabase auth session if valid live URL configured
-      if (isSupabaseConfigured()) {
+      // 1. Check Supabase auth session only if no activeToken is already cached
+      if (!activeToken && isSupabaseConfigured()) {
         try {
           const { data: { session } } = await supabase.auth.getSession();
           if (session?.access_token) {
@@ -50,6 +59,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setToken(null);
         localStorage.removeItem('access_token');
         localStorage.removeItem('user_data');
+        setIsLoading(false);
         return;
       }
 

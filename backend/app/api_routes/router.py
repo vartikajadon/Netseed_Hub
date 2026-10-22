@@ -20,8 +20,14 @@ from app.api_routes.trainer_leaves import router as trainer_leaves_router
 from app.api_routes.tasks import router as tasks_router, submission_router
 from app.api_routes.feedbacks import router as feedbacks_router
 from app.api_routes.curriculum import router as curriculum_router
+from app.api_routes.assessments import router as assessments_router, submission_router as assessment_submissions_router
+from app.api_routes.trainer_feedbacks import router as trainer_feedbacks_router
+from app.api_routes.projects import router as projects_router
 
 api_router = APIRouter(prefix="/api/v1")
+
+
+
 
 api_router.include_router(auth_router)
 api_router.include_router(admin_router)
@@ -45,8 +51,14 @@ api_router.include_router(tasks_router)
 api_router.include_router(submission_router)
 api_router.include_router(feedbacks_router)
 api_router.include_router(curriculum_router)
+api_router.include_router(assessments_router)
+api_router.include_router(assessment_submissions_router)
+api_router.include_router(trainer_feedbacks_router)
+api_router.include_router(projects_router)
 
 @api_router.get("/system/time", summary="Standardized Platform Time Endpoint")
+
+
 def get_standardized_time():
     import time
     from datetime import datetime, timezone

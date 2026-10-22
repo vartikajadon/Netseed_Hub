@@ -38,6 +38,7 @@ export const StudentForm: React.FC<StudentFormProps> = ({
   const [collegeName, setCollegeName] = useState(initialData?.college_name || '');
   const [address, setAddress] = useState(initialData?.address || '');
   const [qualification, setQualification] = useState(initialData?.qualification || '');
+  const [passoutYear, setPassoutYear] = useState<string>(initialData?.passout_year ? String(initialData.passout_year) : '');
   const [domicile, setDomicile] = useState(initialData?.domicile || '');
   const [isCustomDomicile, setIsCustomDomicile] = useState(false);
 
@@ -98,6 +99,7 @@ export const StudentForm: React.FC<StudentFormProps> = ({
       setCollegeName(initialData.college_name || '');
       setAddress(initialData.address || '');
       setQualification(initialData.qualification || '');
+      setPassoutYear(initialData.passout_year ? String(initialData.passout_year) : '');
       const rawBt = (initialData.batch_type || 'TECH_MASTER').toUpperCase();
       const normBt =
         rawBt === 'SIX_MONTHS' || rawBt === '6 MONTHS' || rawBt === '6 MONTHS PROGRAM'
@@ -124,6 +126,7 @@ export const StudentForm: React.FC<StudentFormProps> = ({
       setCollegeName('');
       setAddress('');
       setQualification('');
+      setPassoutYear('');
       setBatchType('TECH_MASTER');
       setTotalFees('60000');
       setPaymentMode('ONLINE');
@@ -217,6 +220,7 @@ export const StudentForm: React.FC<StudentFormProps> = ({
         college_name: collegeName.trim() || undefined,
         address: address.trim() || undefined,
         qualification: qualification.trim() || undefined,
+        passout_year: passoutYear && !isNaN(parseInt(passoutYear, 10)) ? parseInt(passoutYear, 10) : undefined,
         batch_type: batchType,
         total_fees: parsedFees,
         payment_mode: paymentMode,
@@ -537,12 +541,21 @@ export const StudentForm: React.FC<StudentFormProps> = ({
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <Input
               label="Qualification"
               value={qualification}
               onChange={(e) => setQualification(e.target.value)}
               placeholder="e.g. B.Tech / MCA / B.Sc"
+            />
+            <Input
+              label="Passout Year"
+              type="number"
+              value={passoutYear}
+              onChange={(e) => setPassoutYear(e.target.value)}
+              placeholder="e.g. 2024 / 2025"
+              min={1990}
+              max={2035}
             />
             <div>
               <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">Residential Address</label>

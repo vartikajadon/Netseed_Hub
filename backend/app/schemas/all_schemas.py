@@ -185,6 +185,16 @@ class StudentBase(BaseModel):
     dropout_marked_by: Optional[str] = None
     registered_device_id: Optional[str] = None
     face_enrollment_status: str = "NOT_ENROLLED"
+    passout_year: Optional[int] = None
+    cv_url: Optional[str] = None
+    cv_file_name: Optional[str] = None
+    cv_updated_at: Optional[datetime] = None
+    project_title: Optional[str] = None
+    project_description: Optional[str] = None
+    project_status: Optional[str] = "NOT_ASSIGNED"
+    project_url: Optional[str] = None
+    project_assigned_at: Optional[datetime] = None
+    project_submitted_at: Optional[datetime] = None
 
 class StudentCreate(BaseModel):
     user_id: Optional[str] = None
@@ -212,6 +222,11 @@ class StudentCreate(BaseModel):
     enrollment_status: str = "ENROLLED"
     registered_device_id: Optional[str] = None
     face_enrollment_status: str = "NOT_ENROLLED"
+    passout_year: Optional[int] = None
+    cv_url: Optional[str] = None
+    cv_file_name: Optional[str] = None
+    project_title: Optional[str] = None
+    project_description: Optional[str] = None
 
     @field_validator("user_id", "program_id", "batch_id", "mentor_id", "college_name", "qualification", "contact_number", "guardian_name", "marital_status", "address", "domicile", "batch_type", "payment_mode", "installment_type", "enrollment_status", mode="before")
     @classmethod
@@ -234,7 +249,7 @@ class StudentCreate(BaseModel):
                     continue
         return v
 
-    @field_validator("age", "total_fees", mode="before")
+    @field_validator("age", "total_fees", "passout_year", mode="before")
     @classmethod
     def empty_num_to_none(cls, v):
         if v == "" or v is None:
@@ -272,6 +287,13 @@ class StudentUpdate(BaseModel):
     dropout_marked_by: Optional[str] = None
     registered_device_id: Optional[str] = None
     face_enrollment_status: Optional[str] = None
+    passout_year: Optional[int] = None
+    cv_url: Optional[str] = None
+    cv_file_name: Optional[str] = None
+    project_title: Optional[str] = None
+    project_description: Optional[str] = None
+    project_status: Optional[str] = None
+    project_url: Optional[str] = None
 
     @field_validator("program_id", "batch_id", "mentor_id", "college_name", "qualification", "contact_number", "guardian_name", "marital_status", "address", "domicile", "batch_type", "payment_mode", "installment_type", "enrollment_status", mode="before")
     @classmethod
@@ -294,7 +316,7 @@ class StudentUpdate(BaseModel):
                     continue
         return v
 
-    @field_validator("age", mode="before")
+    @field_validator("age", "passout_year", mode="before")
     @classmethod
     def empty_age_to_none(cls, v):
         if v == "" or v is None:

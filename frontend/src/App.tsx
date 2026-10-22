@@ -1,45 +1,54 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { NotificationProvider } from './context/NotificationContext';
-import { Login } from './pages/Login';
-import { StudentDashboard } from './pages/StudentDashboard';
-import { MentorDashboard } from './pages/MentorDashboard';
-import { HRDashboard } from './pages/HRDashboard';
-import { AdminDashboard } from './pages/AdminDashboard';
-import { HRStudentManagement } from './pages/HRStudentManagement';
-import { HRProgramManagement } from './pages/HRProgramManagement';
-import { HRBatchManagement } from './pages/HRBatchManagement';
-import { HRGlobalAttendance } from './pages/HRGlobalAttendance';
-import { HRReports } from './pages/HRReports';
-import { HRCareerPath } from './pages/HRCareerPath';
-import { HRCurriculum } from './pages/HRCurriculum';
-import { StudentDetailPage } from './pages/StudentDetailPage';
-import { StudentProfilePage } from './pages/StudentProfilePage';
-import { StudentAttendancePage } from './pages/StudentAttendancePage';
-import { HRInstitutionTraining } from './pages/HRInstitutionTraining';
-import { HRNoDues } from './pages/HRNoDues';
-import { HRFees } from './pages/HRFees';
-import { HRLetters } from './pages/HRLetters';
-import { HRCertificates } from './pages/HRCertificates';
-import { CalendarPage } from './pages/CalendarPage';
-import { SectionPage } from './pages/SectionPage';
-import { MentorTaskAssignment } from './pages/MentorTaskAssignment';
-import { MentorTaskEvaluation } from './pages/MentorTaskEvaluation';
-import { MentorFeedbackPage } from './pages/MentorFeedbackPage';
-import { MentorStudentsPage } from './pages/MentorStudentsPage';
-import { MentorCurriculumPage } from './pages/MentorCurriculumPage';
-import { StudentTasksPage } from './pages/StudentTasksPage';
-import { StudentFeedbackPage } from './pages/StudentFeedbackPage';
-import { StudentCurriculumPage } from './pages/StudentCurriculumPage';
 import { Loading } from './components/Loading';
+
+// Code-split all pages to minimize initial bundle size and maximize loading speed
+const Login = lazy(() => import('./pages/Login').then(m => ({ default: m.Login })));
+const StudentDashboard = lazy(() => import('./pages/StudentDashboard').then(m => ({ default: m.StudentDashboard })));
+const MentorDashboard = lazy(() => import('./pages/MentorDashboard').then(m => ({ default: m.MentorDashboard })));
+const HRDashboard = lazy(() => import('./pages/HRDashboard').then(m => ({ default: m.HRDashboard })));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
+const HRStudentManagement = lazy(() => import('./pages/HRStudentManagement').then(m => ({ default: m.HRStudentManagement })));
+const HRProgramManagement = lazy(() => import('./pages/HRProgramManagement').then(m => ({ default: m.HRProgramManagement })));
+const HRBatchManagement = lazy(() => import('./pages/HRBatchManagement').then(m => ({ default: m.HRBatchManagement })));
+const HRGlobalAttendance = lazy(() => import('./pages/HRGlobalAttendance').then(m => ({ default: m.HRGlobalAttendance })));
+const HRReports = lazy(() => import('./pages/HRReports').then(m => ({ default: m.HRReports })));
+const HRCareerPath = lazy(() => import('./pages/HRCareerPath').then(m => ({ default: m.HRCareerPath })));
+const HRCurriculum = lazy(() => import('./pages/HRCurriculum').then(m => ({ default: m.HRCurriculum })));
+const StudentDetailPage = lazy(() => import('./pages/StudentDetailPage').then(m => ({ default: m.StudentDetailPage })));
+const StudentProfilePage = lazy(() => import('./pages/StudentProfilePage').then(m => ({ default: m.StudentProfilePage })));
+const StudentAttendancePage = lazy(() => import('./pages/StudentAttendancePage').then(m => ({ default: m.StudentAttendancePage })));
+const HRInstitutionTraining = lazy(() => import('./pages/HRInstitutionTraining').then(m => ({ default: m.HRInstitutionTraining })));
+const HRNoDues = lazy(() => import('./pages/HRNoDues').then(m => ({ default: m.HRNoDues })));
+const HRFees = lazy(() => import('./pages/HRFees').then(m => ({ default: m.HRFees })));
+const HRLetters = lazy(() => import('./pages/HRLetters').then(m => ({ default: m.HRLetters })));
+const HRCertificates = lazy(() => import('./pages/HRCertificates').then(m => ({ default: m.HRCertificates })));
+const CalendarPage = lazy(() => import('./pages/CalendarPage').then(m => ({ default: m.CalendarPage })));
+const SectionPage = lazy(() => import('./pages/SectionPage').then(m => ({ default: m.SectionPage })));
+const MentorTaskAssignment = lazy(() => import('./pages/MentorTaskAssignment').then(m => ({ default: m.MentorTaskAssignment })));
+const MentorTaskEvaluation = lazy(() => import('./pages/MentorTaskEvaluation').then(m => ({ default: m.MentorTaskEvaluation })));
+const MentorFeedbackPage = lazy(() => import('./pages/MentorFeedbackPage').then(m => ({ default: m.MentorFeedbackPage })));
+const MentorStudentsPage = lazy(() => import('./pages/MentorStudentsPage').then(m => ({ default: m.MentorStudentsPage })));
+const MentorCurriculumPage = lazy(() => import('./pages/MentorCurriculumPage').then(m => ({ default: m.MentorCurriculumPage })));
+const StudentTasksPage = lazy(() => import('./pages/StudentTasksPage').then(m => ({ default: m.StudentTasksPage })));
+const StudentFeedbackPage = lazy(() => import('./pages/StudentFeedbackPage').then(m => ({ default: m.StudentFeedbackPage })));
+const StudentCurriculumPage = lazy(() => import('./pages/StudentCurriculumPage').then(m => ({ default: m.StudentCurriculumPage })));
+const StudentAssessments = lazy(() => import('./pages/StudentAssessments').then(m => ({ default: m.StudentAssessments })));
+const MentorAssessments = lazy(() => import('./pages/MentorAssessments').then(m => ({ default: m.MentorAssessments })));
+const MentorAssessmentEvaluation = lazy(() => import('./pages/MentorAssessmentEvaluation').then(m => ({ default: m.MentorAssessmentEvaluation })));
+const MentorScoresheet = lazy(() => import('./pages/MentorScoresheet').then(m => ({ default: m.MentorScoresheet })));
+const MentorProjects = lazy(() => import('./pages/MentorProjects').then(m => ({ default: m.MentorProjects })));
+const StudentTrainerFeedback = lazy(() => import('./pages/StudentTrainerFeedback').then(m => ({ default: m.StudentTrainerFeedback })));
+const HRTrainerFeedback = lazy(() => import('./pages/HRTrainerFeedback').then(m => ({ default: m.HRTrainerFeedback })));
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: string[] }> = ({ children, allowedRoles }) => {
   const { user, isAuthenticated, isLoading } = useAuth();
 
-  if (isLoading) {
-    return <Loading fullScreen message="Verifying authentication session & backend RBAC claims..." />;
+  if (isLoading && !user) {
+    return <Loading fullScreen message="Verifying authentication session..." />;
   }
 
   if (!isAuthenticated || !user) {
@@ -83,61 +92,70 @@ export const App: React.FC = () => {
       <AuthProvider>
         <NotificationProvider>
           <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<RootRedirect />} />
-              <Route path="/login" element={<Login />} />
+            <Suspense fallback={<Loading fullScreen message="Loading page..." />}>
+              <Routes>
+                <Route path="/" element={<RootRedirect />} />
+                <Route path="/login" element={<Login />} />
 
-              {/* STUDENT ROUTES */}
-              <Route path="/student" element={<ProtectedRoute allowedRoles={['STUDENT', 'SUPER_ADMIN']}><StudentDashboard /></ProtectedRoute>} />
-              <Route path="/student/curriculum" element={<ProtectedRoute allowedRoles={['STUDENT', 'SUPER_ADMIN']}><StudentCurriculumPage /></ProtectedRoute>} />
-              <Route path="/student/profile" element={<ProtectedRoute allowedRoles={['STUDENT', 'SUPER_ADMIN']}><StudentProfilePage /></ProtectedRoute>} />
-              <Route path="/student/attendance" element={<ProtectedRoute allowedRoles={['STUDENT', 'SUPER_ADMIN']}><StudentAttendancePage /></ProtectedRoute>} />
-              <Route path="/student/tasks" element={<ProtectedRoute allowedRoles={['STUDENT', 'SUPER_ADMIN']}><StudentTasksPage /></ProtectedRoute>} />
-              <Route path="/student/skills" element={<ProtectedRoute allowedRoles={['STUDENT', 'SUPER_ADMIN']}><SectionPage title="My Skill Metrics" subtitle="Skill Evaluations" category="STUDENT" description="Historical technical skill evaluations and radar chart metrics." /></ProtectedRoute>} />
-              <Route path="/student/career" element={<ProtectedRoute allowedRoles={['STUDENT', 'SUPER_ADMIN']}><HRCareerPath /></ProtectedRoute>} />
-              <Route path="/student/feedback" element={<ProtectedRoute allowedRoles={['STUDENT', 'SUPER_ADMIN']}><StudentFeedbackPage /></ProtectedRoute>} />
+                {/* STUDENT ROUTES */}
+                <Route path="/student" element={<ProtectedRoute allowedRoles={['STUDENT', 'SUPER_ADMIN']}><StudentDashboard /></ProtectedRoute>} />
+                <Route path="/student/curriculum" element={<ProtectedRoute allowedRoles={['STUDENT', 'SUPER_ADMIN']}><StudentCurriculumPage /></ProtectedRoute>} />
+                <Route path="/student/profile" element={<ProtectedRoute allowedRoles={['STUDENT', 'SUPER_ADMIN']}><StudentProfilePage /></ProtectedRoute>} />
+                <Route path="/student/attendance" element={<ProtectedRoute allowedRoles={['STUDENT', 'SUPER_ADMIN']}><StudentAttendancePage /></ProtectedRoute>} />
+                <Route path="/student/tasks" element={<ProtectedRoute allowedRoles={['STUDENT', 'SUPER_ADMIN']}><StudentTasksPage /></ProtectedRoute>} />
+                <Route path="/student/assessments" element={<ProtectedRoute allowedRoles={['STUDENT', 'SUPER_ADMIN']}><StudentAssessments /></ProtectedRoute>} />
+                <Route path="/student/skills" element={<ProtectedRoute allowedRoles={['STUDENT', 'SUPER_ADMIN']}><SectionPage title="My Skill Metrics" subtitle="Skill Evaluations" category="STUDENT" description="Historical technical skill evaluations and radar chart metrics." /></ProtectedRoute>} />
+                <Route path="/student/career" element={<ProtectedRoute allowedRoles={['STUDENT', 'SUPER_ADMIN']}><HRCareerPath /></ProtectedRoute>} />
+                <Route path="/student/feedback" element={<ProtectedRoute allowedRoles={['STUDENT', 'SUPER_ADMIN']}><StudentFeedbackPage /></ProtectedRoute>} />
+                <Route path="/student/trainer-feedback" element={<ProtectedRoute allowedRoles={['STUDENT', 'SUPER_ADMIN']}><StudentTrainerFeedback /></ProtectedRoute>} />
 
-              {/* MENTOR ROUTES */}
-              <Route path="/mentor" element={<ProtectedRoute allowedRoles={['MENTOR', 'SUPER_ADMIN']}><MentorDashboard /></ProtectedRoute>} />
-              <Route path="/mentor/curriculum" element={<ProtectedRoute allowedRoles={['MENTOR', 'SUPER_ADMIN']}><MentorCurriculumPage /></ProtectedRoute>} />
-              <Route path="/mentor/students" element={<ProtectedRoute allowedRoles={['MENTOR', 'SUPER_ADMIN']}><MentorStudentsPage /></ProtectedRoute>} />
-              <Route path="/mentor/task-assignment" element={<ProtectedRoute allowedRoles={['MENTOR', 'SUPER_ADMIN']}><MentorTaskAssignment /></ProtectedRoute>} />
-              <Route path="/mentor/task-evaluation" element={<ProtectedRoute allowedRoles={['MENTOR', 'SUPER_ADMIN']}><MentorTaskEvaluation /></ProtectedRoute>} />
-              <Route path="/mentor/tasks" element={<Navigate to="/mentor/task-assignment" replace />} />
-              <Route path="/mentor/feedback" element={<ProtectedRoute allowedRoles={['MENTOR', 'SUPER_ADMIN']}><MentorFeedbackPage /></ProtectedRoute>} />
+                {/* MENTOR ROUTES */}
+                <Route path="/mentor" element={<ProtectedRoute allowedRoles={['MENTOR', 'SUPER_ADMIN']}><MentorDashboard /></ProtectedRoute>} />
+                <Route path="/mentor/curriculum" element={<ProtectedRoute allowedRoles={['MENTOR', 'SUPER_ADMIN']}><MentorCurriculumPage /></ProtectedRoute>} />
+                <Route path="/mentor/students" element={<ProtectedRoute allowedRoles={['MENTOR', 'SUPER_ADMIN']}><MentorStudentsPage /></ProtectedRoute>} />
+                <Route path="/mentor/task-assignment" element={<ProtectedRoute allowedRoles={['MENTOR', 'SUPER_ADMIN']}><MentorTaskAssignment /></ProtectedRoute>} />
+                <Route path="/mentor/task-evaluation" element={<ProtectedRoute allowedRoles={['MENTOR', 'SUPER_ADMIN']}><MentorTaskEvaluation /></ProtectedRoute>} />
+                <Route path="/mentor/assessments" element={<ProtectedRoute allowedRoles={['MENTOR', 'SUPER_ADMIN', 'HR']}><MentorAssessments /></ProtectedRoute>} />
+                <Route path="/mentor/assessment-evaluation" element={<ProtectedRoute allowedRoles={['MENTOR', 'SUPER_ADMIN', 'HR']}><MentorAssessmentEvaluation /></ProtectedRoute>} />
+                <Route path="/mentor/projects" element={<ProtectedRoute allowedRoles={['MENTOR', 'SUPER_ADMIN']}><MentorProjects /></ProtectedRoute>} />
+                <Route path="/mentor/scoresheet" element={<ProtectedRoute allowedRoles={['MENTOR', 'SUPER_ADMIN', 'HR']}><MentorScoresheet /></ProtectedRoute>} />
+                <Route path="/mentor/tasks" element={<Navigate to="/mentor/task-assignment" replace />} />
+                <Route path="/mentor/feedback" element={<ProtectedRoute allowedRoles={['MENTOR', 'SUPER_ADMIN']}><MentorFeedbackPage /></ProtectedRoute>} />
 
-              {/* HR / PROGRAM MANAGER ROUTES */}
-              <Route path="/hr" element={<ProtectedRoute allowedRoles={['HR', 'SUPER_ADMIN']}><HRDashboard /></ProtectedRoute>} />
-              <Route path="/hr/students" element={<ProtectedRoute allowedRoles={['HR', 'SUPER_ADMIN']}><HRStudentManagement /></ProtectedRoute>} />
-              <Route path="/hr/students/:student_id" element={<ProtectedRoute allowedRoles={['HR', 'SUPER_ADMIN']}><StudentDetailPage /></ProtectedRoute>} />
-              <Route path="/hr/programs" element={<ProtectedRoute allowedRoles={['HR', 'SUPER_ADMIN']}><HRProgramManagement /></ProtectedRoute>} />
-              <Route path="/hr/batches" element={<ProtectedRoute allowedRoles={['HR', 'SUPER_ADMIN']}><HRBatchManagement /></ProtectedRoute>} />
-              <Route path="/hr/institution-training" element={<ProtectedRoute allowedRoles={['HR', 'SUPER_ADMIN']}><HRInstitutionTraining /></ProtectedRoute>} />
-              <Route path="/hr/attendance" element={<ProtectedRoute allowedRoles={['HR', 'SUPER_ADMIN']}><HRGlobalAttendance /></ProtectedRoute>} />
-              <Route path="/hr/no-dues" element={<ProtectedRoute allowedRoles={['HR', 'SUPER_ADMIN']}><HRNoDues /></ProtectedRoute>} />
-              <Route path="/hr/fees" element={<ProtectedRoute allowedRoles={['HR', 'SUPER_ADMIN']}><HRFees /></ProtectedRoute>} />
-              <Route path="/hr/letters" element={<ProtectedRoute allowedRoles={['HR', 'SUPER_ADMIN']}><HRLetters /></ProtectedRoute>} />
-              <Route path="/hr/certificates" element={<ProtectedRoute allowedRoles={['HR', 'SUPER_ADMIN']}><HRCertificates /></ProtectedRoute>} />
-              <Route path="/hr/reports" element={<ProtectedRoute allowedRoles={['HR', 'SUPER_ADMIN']}><HRReports /></ProtectedRoute>} />
-              <Route path="/hr/curriculum" element={<ProtectedRoute allowedRoles={['HR', 'SUPER_ADMIN']}><HRCurriculum /></ProtectedRoute>} />
-              <Route path="/hr/career" element={<Navigate to="/hr/curriculum" replace />} />
+                {/* HR / PROGRAM MANAGER ROUTES */}
+                <Route path="/hr" element={<ProtectedRoute allowedRoles={['HR', 'SUPER_ADMIN']}><HRDashboard /></ProtectedRoute>} />
+                <Route path="/hr/students" element={<ProtectedRoute allowedRoles={['HR', 'SUPER_ADMIN']}><HRStudentManagement /></ProtectedRoute>} />
+                <Route path="/hr/students/:student_id" element={<ProtectedRoute allowedRoles={['HR', 'SUPER_ADMIN']}><StudentDetailPage /></ProtectedRoute>} />
+                <Route path="/hr/programs" element={<ProtectedRoute allowedRoles={['HR', 'SUPER_ADMIN']}><HRProgramManagement /></ProtectedRoute>} />
+                <Route path="/hr/batches" element={<ProtectedRoute allowedRoles={['HR', 'SUPER_ADMIN']}><HRBatchManagement /></ProtectedRoute>} />
+                <Route path="/hr/institution-training" element={<ProtectedRoute allowedRoles={['HR', 'SUPER_ADMIN']}><HRInstitutionTraining /></ProtectedRoute>} />
+                <Route path="/hr/attendance" element={<ProtectedRoute allowedRoles={['HR', 'SUPER_ADMIN']}><HRGlobalAttendance /></ProtectedRoute>} />
+                <Route path="/hr/no-dues" element={<ProtectedRoute allowedRoles={['HR', 'SUPER_ADMIN']}><HRNoDues /></ProtectedRoute>} />
+                <Route path="/hr/fees" element={<ProtectedRoute allowedRoles={['HR', 'SUPER_ADMIN']}><HRFees /></ProtectedRoute>} />
+                <Route path="/hr/letters" element={<ProtectedRoute allowedRoles={['HR', 'SUPER_ADMIN']}><HRLetters /></ProtectedRoute>} />
+                <Route path="/hr/certificates" element={<ProtectedRoute allowedRoles={['HR', 'SUPER_ADMIN']}><HRCertificates /></ProtectedRoute>} />
+                <Route path="/hr/reports" element={<ProtectedRoute allowedRoles={['HR', 'SUPER_ADMIN']}><HRReports /></ProtectedRoute>} />
+                <Route path="/hr/trainer-feedback" element={<ProtectedRoute allowedRoles={['HR', 'SUPER_ADMIN']}><HRTrainerFeedback /></ProtectedRoute>} />
+                <Route path="/hr/curriculum" element={<ProtectedRoute allowedRoles={['HR', 'SUPER_ADMIN']}><HRCurriculum /></ProtectedRoute>} />
+                <Route path="/hr/career" element={<Navigate to="/hr/curriculum" replace />} />
 
-              {/* GLOBAL CALENDAR ROUTE FOR ALL AUTHENTICATED USERS */}
-              <Route path="/calendar" element={<ProtectedRoute allowedRoles={['STUDENT', 'MENTOR', 'HR', 'SUPER_ADMIN']}><CalendarPage /></ProtectedRoute>} />
+                {/* GLOBAL CALENDAR ROUTE FOR ALL AUTHENTICATED USERS */}
+                <Route path="/calendar" element={<ProtectedRoute allowedRoles={['STUDENT', 'MENTOR', 'HR', 'SUPER_ADMIN']}><CalendarPage /></ProtectedRoute>} />
 
-              {/* SUPER ADMIN ROUTES */}
-              <Route path="/admin" element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']}><AdminDashboard /></ProtectedRoute>} />
-              <Route path="/admin/dashboard" element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']}><AdminDashboard /></ProtectedRoute>} />
-              <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']}><SectionPage title="User Roster" subtitle="Global System Identities" category="SUPER_ADMIN" description="View and manage all registered system identities and account states." /></ProtectedRoute>} />
-              <Route path="/admin/roles" element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']}><SectionPage title="RBAC Role Management" subtitle="System Permissions" category="SUPER_ADMIN" description="Modify user roles (STUDENT, MENTOR, HR, SUPER_ADMIN)." /></ProtectedRoute>} />
-              <Route path="/admin/geofences" element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']}><SectionPage title="Campus Geofences" subtitle="Coordinates & Radius" category="SUPER_ADMIN" description="Define office campus center coordinates and radius boundaries." /></ProtectedRoute>} />
-              <Route path="/admin/attendance-rules" element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']}><SectionPage title="Attendance Rules" subtitle="Policy Configuration" category="SUPER_ADMIN" description="Configure shift hours, grace periods, cutoffs, and minimum daily durations." /></ProtectedRoute>} />
-              <Route path="/admin/audit-logs" element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']}><SectionPage title="Audit Log Trail" subtitle="Immutable Compliance Logs" category="SUPER_ADMIN" description="Inspect immutable audit logs detailing actor ID, action, and timestamp." /></ProtectedRoute>} />
-              <Route path="/admin/biometric-controls" element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']}><SectionPage title="Biometric Controls" subtitle="Privacy & Vectors" category="SUPER_ADMIN" description="Manage biometric consent privacy templates and vector embedding rules." /></ProtectedRoute>} />
-              <Route path="/admin/system" element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']}><SectionPage title="System Diagnostics" subtitle="Engine Health" category="SUPER_ADMIN" description="Check database connection pools, token guards, and system metrics." /></ProtectedRoute>} />
+                {/* SUPER ADMIN ROUTES */}
+                <Route path="/admin" element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']}><AdminDashboard /></ProtectedRoute>} />
+                <Route path="/admin/dashboard" element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']}><AdminDashboard /></ProtectedRoute>} />
+                <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']}><SectionPage title="User Roster" subtitle="Global System Identities" category="SUPER_ADMIN" description="View and manage all registered system identities and account states." /></ProtectedRoute>} />
+                <Route path="/admin/roles" element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']}><SectionPage title="RBAC Role Management" subtitle="System Permissions" category="SUPER_ADMIN" description="Modify user roles (STUDENT, MENTOR, HR, SUPER_ADMIN)." /></ProtectedRoute>} />
+                <Route path="/admin/geofences" element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']}><SectionPage title="Campus Geofences" subtitle="Coordinates & Radius" category="SUPER_ADMIN" description="Define office campus center coordinates and radius boundaries." /></ProtectedRoute>} />
+                <Route path="/admin/attendance-rules" element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']}><SectionPage title="Attendance Rules" subtitle="Policy Configuration" category="SUPER_ADMIN" description="Configure shift hours, grace periods, cutoffs, and minimum daily durations." /></ProtectedRoute>} />
+                <Route path="/admin/audit-logs" element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']}><SectionPage title="Audit Log Trail" subtitle="Immutable Compliance Logs" category="SUPER_ADMIN" description="Inspect immutable audit logs detailing actor ID, action, and timestamp." /></ProtectedRoute>} />
+                <Route path="/admin/biometric-controls" element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']}><SectionPage title="Biometric Controls" subtitle="Privacy & Vectors" category="SUPER_ADMIN" description="Manage biometric consent privacy templates and vector embedding rules." /></ProtectedRoute>} />
+                <Route path="/admin/system" element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']}><SectionPage title="System Diagnostics" subtitle="Engine Health" category="SUPER_ADMIN" description="Check database connection pools, token guards, and system metrics." /></ProtectedRoute>} />
 
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </Suspense>
           </BrowserRouter>
         </NotificationProvider>
       </AuthProvider>

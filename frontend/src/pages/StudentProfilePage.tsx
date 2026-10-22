@@ -22,6 +22,9 @@ import {
   Trash2,
   Save,
   Move,
+  FileText,
+  ExternalLink,
+  Download,
 } from 'lucide-react';
 
 export const StudentProfilePage: React.FC = () => {
@@ -37,6 +40,12 @@ export const StudentProfilePage: React.FC = () => {
   const [isUpdatingPhoto, setIsUpdatingPhoto] = useState(false);
   const [photoSuccess, setPhotoSuccess] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
+
+  // CV / Resume upload state
+  const cvFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [isUploadingCv, setIsUploadingCv] = useState(false);
+  const [cvSuccess, setCvSuccess] = useState<string | null>(null);
+  const [cvError, setCvError] = useState<string | null>(null);
 
   const fetchProfile = async () => {
     setIsLoading(true);
@@ -136,6 +145,72 @@ export const StudentProfilePage: React.FC = () => {
     }
   };
 
+  const handleCvSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validTypes = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ];
+    const isDoc =
+      validTypes.includes(file.type) ||
+      file.name.endsWith('.pdf') ||
+      file.name.endsWith('.docx') ||
+      file.name.endsWith('.doc');
+
+    if (!isDoc) {
+      setCvError('Please select a valid document format (.pdf, .doc, or .docx).');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setCvError('File size exceeds 10MB limit. Please upload a smaller document.');
+      return;
+    }
+
+    setIsUploadingCv(true);
+    setCvError(null);
+    setCvSuccess(null);
+
+    const reader = new FileReader();
+    reader.onload = async (readerEvent) => {
+      try {
+        const dataUrl = readerEvent.target?.result as string;
+        const res = await api.post<{ message: string; cv_url: string; cv_file_name: string; cv_updated_at: string }>(
+          '/students/me/cv',
+          {
+            cv_url: dataUrl,
+            cv_file_name: file.name,
+          }
+        );
+        setStudent((prev) =>
+          prev
+            ? {
+                ...prev,
+                cv_url: res.cv_url,
+                cv_file_name: res.cv_file_name,
+                cv_updated_at: res.cv_updated_at,
+              }
+            : null
+        );
+        setCvSuccess('Your CV has been uploaded successfully! Mentors and HR can now view your profile resume.');
+        setTimeout(() => setCvSuccess(null), 4000);
+      } catch (err: any) {
+        setCvError(err.message || 'Failed to upload CV document.');
+      } finally {
+        setIsUploadingCv(false);
+        if (cvFileInputRef.current) cvFileInputRef.current.value = '';
+      }
+    };
+    reader.onerror = () => {
+      setCvError('Failed to read selected document.');
+      setIsUploadingCv(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
   if (isLoading) {
     return (
       <Layout>
@@ -202,6 +277,12 @@ export const StudentProfilePage: React.FC = () => {
               <div>
                 <span className="text-xs text-slate-500 dark:text-slate-400 block font-medium">Qualification</span>
                 <span className="text-slate-700 dark:text-slate-300">{student.qualification || 'N/A'}</span>
+              </div>
+              <div>
+                <span className="text-xs text-slate-500 dark:text-slate-400 block font-medium">Passout Year</span>
+                <span className="font-semibold text-slate-900 dark:text-slate-100 font-mono">
+                  {student.passout_year ? String(student.passout_year) : 'N/A'}
+                </span>
               </div>
               {student.domicile && (
                 <div>
@@ -417,6 +498,109 @@ export const StudentProfilePage: React.FC = () => {
             </div>
           </Card>
         </div>
+
+        {/* Section 4: Resume / Curriculum Vitae (CV) */}
+        <Card
+          title="Curriculum Vitae (CV / Resume)"
+          subtitle="Upload and manage your profile resume for Mentor project guidance and HR placement tracking"
+        >
+          <div className="space-y-4">
+            <input
+              type="file"
+              ref={cvFileInputRef}
+              accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              onChange={handleCvSelect}
+              className="hidden"
+            />
+
+            <div className="p-4 sm:p-5 bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="flex items-start gap-3.5">
+                <div className="w-12 h-12 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 border border-indigo-500/20">
+                  <FileText className="w-6 h-6" />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-semibold text-slate-900 dark:text-slate-100 text-sm">
+                      {student.cv_file_name || (student.cv_url ? 'Resume_Document.pdf' : 'No Resume Uploaded')}
+                    </h4>
+                    {student.cv_url ? (
+                      <Badge variant="success">Uploaded & Active</Badge>
+                    ) : (
+                      <Badge variant="warning">Pending Upload</Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {student.cv_updated_at
+                      ? `Last updated on ${new Date(student.cv_updated_at).toLocaleString()}`
+                      : 'Accepts PDF, DOC, or DOCX formats up to 10MB.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                {student.cv_url && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      if (student.cv_url) {
+                        const win = window.open();
+                        if (win) {
+                          win.document.write(
+                            `<iframe src="${student.cv_url}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`
+                          );
+                          win.document.title = student.cv_file_name || 'Student_CV';
+                        } else {
+                          window.open(student.cv_url, '_blank');
+                        }
+                      }
+                    }}
+                    className="flex-1 md:flex-none justify-center"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 mr-1 text-indigo-500" /> View CV
+                  </Button>
+                )}
+
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={() => cvFileInputRef.current?.click()}
+                  disabled={isUploadingCv}
+                  className="flex-1 md:flex-none justify-center"
+                >
+                  {isUploadingCv ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-3.5 h-3.5 mr-1.5" />
+                      {student.cv_url ? 'Replace / Update CV' : 'Upload CV'}
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {cvSuccess && (
+              <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded-xl text-xs flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{cvSuccess}</span>
+              </div>
+            )}
+
+            {cvError && (
+              <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-300 rounded-xl text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>{cvError}</span>
+              </div>
+            )}
+
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+              Note: Mentors and HR team members can review your CV directly in their mentor dashboard and student profile sheets to track your qualifications and recommend project assignments.
+            </p>
+          </div>
+        </Card>
 
         {/* Photo Adjuster Modal */}
         <PhotoAdjusterModal

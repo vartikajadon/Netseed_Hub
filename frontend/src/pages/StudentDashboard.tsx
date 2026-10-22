@@ -28,7 +28,7 @@ import {
   User, ShieldCheck, CheckCircle2, Clock, Camera, MapPin, AlertCircle,
   Globe, FileCheck, IndianRupee, Mail, Award, CheckSquare, Download,
   ExternalLink, Send, AlertTriangle, Star, MessageSquare, ArrowRight,
-  BookOpen, TrendingUp
+  BookOpen, TrendingUp, FolderGit2
 } from 'lucide-react';
 import { formatLocalTime } from '../lib/dateUtils';
 
@@ -56,6 +56,12 @@ export const StudentDashboard: React.FC = () => {
   const [selectedCertificate, setSelectedCertificate] = useState<IssuedCertificate | null>(null);
   const [myFeedbacks, setMyFeedbacks] = useState<MentorFeedbackItem[]>([]);
   const [myCurriculum, setMyCurriculum] = useState<ProgramCurriculum | null>(null);
+
+  // Capstone Project Submission State
+  const [myProjectUrlInput, setMyProjectUrlInput] = useState('');
+  const [isSubmittingProjectUrl, setIsSubmittingProjectUrl] = useState(false);
+  const [projectSubmitSuccess, setProjectSubmitSuccess] = useState<string | null>(null);
+  const [projectSubmitError, setProjectSubmitError] = useState<string | null>(null);
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -112,6 +118,45 @@ export const StudentDashboard: React.FC = () => {
   useEffect(() => {
     fetchDashboardData();
   }, [user]);
+
+  useEffect(() => {
+    if (student?.project_url) {
+      setMyProjectUrlInput(student.project_url);
+    }
+  }, [student?.project_url]);
+
+  const handleSubmitProjectUrl = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!myProjectUrlInput.trim()) {
+      setProjectSubmitError('Please enter a valid project URL.');
+      return;
+    }
+    setIsSubmittingProjectUrl(true);
+    setProjectSubmitError(null);
+    setProjectSubmitSuccess(null);
+    try {
+      const res = await api.put<{ message: string; project_url: string; project_status: string; project_submitted_at: string }>(
+        '/projects/my-project/submit',
+        { project_url: myProjectUrlInput.trim() }
+      );
+      setStudent((prev) =>
+        prev
+          ? {
+              ...prev,
+              project_url: res.project_url,
+              project_status: res.project_status,
+              project_submitted_at: res.project_submitted_at,
+            }
+          : null
+      );
+      setProjectSubmitSuccess('Project URL submitted successfully! It has been synchronized with your mentor score sheet.');
+      setTimeout(() => setProjectSubmitSuccess(null), 4000);
+    } catch (err: any) {
+      setProjectSubmitError(err.message || 'Failed to submit project URL.');
+    } finally {
+      setIsSubmittingProjectUrl(false);
+    }
+  };
 
   const handleToggleChecklistItem = (id: string) => {
     setStudentChecklist(prev =>
@@ -642,6 +687,111 @@ export const StudentDashboard: React.FC = () => {
                 )}
               </Card>
             </div>
+
+            {/* My Assigned Capstone Project Card */}
+            <Card
+              title="Assigned Capstone Project"
+              subtitle="Mentor Project Specification & Student URL Submission"
+              action={
+                student?.project_url ? (
+                  <Badge variant="success">Submitted</Badge>
+                ) : student?.project_title ? (
+                  <Badge variant="warning">In Progress</Badge>
+                ) : (
+                  <Badge variant="neutral">Pending Assignment</Badge>
+                )
+              }
+            >
+              {student?.project_title ? (
+                <div className="space-y-4">
+                  <div className="p-4 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200/80 dark:border-indigo-800/60 rounded-2xl space-y-2">
+                    <div className="flex items-center gap-2">
+                      <FolderGit2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                      <h4 className="font-bold text-slate-900 dark:text-slate-100 text-sm">
+                        {student.project_title}
+                      </h4>
+                    </div>
+                    {student.project_description && (
+                      <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed pl-6">
+                        {student.project_description}
+                      </p>
+                    )}
+                  </div>
+
+                  <form onSubmit={handleSubmitProjectUrl} className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        Submit or Update Your Project Repository / Live URL (GitHub, GitLab, or Hosted URL) *
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="url"
+                          required
+                          value={myProjectUrlInput}
+                          onChange={(e) => setMyProjectUrlInput(e.target.value)}
+                          placeholder="https://github.com/username/capstone-project"
+                          className="flex-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-200 rounded-xl px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+                        />
+                        <Button
+                          type="submit"
+                          variant="primary"
+                          size="sm"
+                          isLoading={isSubmittingProjectUrl}
+                          className="font-bold shrink-0 text-xs"
+                        >
+                          <Send className="w-3.5 h-3.5 mr-1" />
+                          {student.project_url ? 'Update URL' : 'Submit Project'}
+                        </Button>
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                        Submitting here automatically synchronizes your link into your mentor's evaluation scoresheet.
+                      </p>
+                    </div>
+
+                    {student.project_url && (
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-slate-500 dark:text-slate-400">Current Submitted Link:</span>
+                        <a
+                          href={student.project_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-indigo-600 dark:text-indigo-400 font-mono font-bold hover:underline flex items-center gap-1"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          {student.project_url}
+                        </a>
+                      </div>
+                    )}
+
+                    {projectSubmitSuccess && (
+                      <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded-xl text-xs flex items-center gap-2 font-medium">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <span>{projectSubmitSuccess}</span>
+                      </div>
+                    )}
+
+                    {projectSubmitError && (
+                      <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-300 rounded-xl text-xs flex items-center gap-2 font-medium">
+                        <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                        <span>{projectSubmitError}</span>
+                      </div>
+                    )}
+                  </form>
+                </div>
+              ) : (
+                <div className="py-8 text-center space-y-2">
+                  <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
+                    <FolderGit2 className="w-5 h-5" />
+                  </div>
+                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                    No Capstone Project Assigned Yet
+                  </h4>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
+                    Your assigned mentor will allocate a batch or individual capstone project topic here. Check back soon!
+                  </p>
+                </div>
+              )}
+            </Card>
 
             {/* Course Curriculum Progression Card */}
             <Card

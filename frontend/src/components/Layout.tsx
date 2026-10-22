@@ -12,8 +12,10 @@ import {
   LayoutDashboard, Users, BookOpen, Layers, Clock, BarChart3,
   RefreshCw, GraduationCap, CheckSquare, Sparkles, MessageSquare,
   UserCheck, MapPin, Sliders, FileText, Fingerprint, Settings,
-  Calendar, Building2, FileCheck, IndianRupee, Mail, Award
+  Calendar, Building2, FileCheck, IndianRupee, Mail, Award,
+  ClipboardList, FileSpreadsheet, MessageSquarePlus, FolderGit2
 } from 'lucide-react';
+
 
 interface NavItem {
   label: string;
@@ -72,9 +74,11 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           { label: 'Attendance', path: '/student/attendance', icon: Clock },
           { label: 'Calendar', path: '/calendar', icon: Calendar },
           { label: 'Tasks', path: '/student/tasks', icon: CheckSquare },
+          { label: 'Assessments', path: '/student/assessments', icon: ClipboardList },
           { label: 'Skills', path: '/student/skills', icon: Sparkles },
           { label: 'Career', path: '/student/career', icon: GraduationCap },
           { label: 'Feedback', path: '/student/feedback', icon: MessageSquare },
+          { label: 'Feedback for Trainers', path: '/student/trainer-feedback', icon: MessageSquarePlus },
           { label: 'Profile', path: '/student/profile', icon: UserCheck },
         ];
       case 'MENTOR':
@@ -82,9 +86,13 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           { label: 'Overview', path: '/mentor', icon: LayoutDashboard },
           { label: 'Curriculum', path: '/mentor/curriculum', icon: BookOpen },
           { label: 'Students', path: '/mentor/students', icon: Users },
+          { label: 'Projects', path: '/mentor/projects', icon: FolderGit2 },
           { label: 'Calendar', path: '/calendar', icon: Calendar },
           { label: 'Task Assignment', path: '/mentor/task-assignment', icon: CheckSquare },
           { label: 'Task Evaluation', path: '/mentor/task-evaluation', icon: Award },
+          { label: 'Assessment', path: '/mentor/assessments', icon: ClipboardList },
+          { label: 'Assessment Evaluation', path: '/mentor/assessment-evaluation', icon: FileSpreadsheet },
+          { label: 'Scoresheet', path: '/mentor/scoresheet', icon: FileSpreadsheet },
           { label: 'Feedback', path: '/mentor/feedback', icon: MessageSquare },
         ];
       case 'HR':
@@ -100,6 +108,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           { label: 'Fees', path: '/hr/fees', icon: IndianRupee },
           { label: 'Letters', path: '/hr/letters', icon: Mail },
           { label: 'Certificates', path: '/hr/certificates', icon: Award },
+          { label: 'Trainer Feedback', path: '/hr/trainer-feedback', icon: MessageSquarePlus },
           { label: 'Reports', path: '/hr/reports', icon: BarChart3 },
           { label: 'Curriculum', path: '/hr/curriculum', icon: BookOpen },
         ];
@@ -114,6 +123,11 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           { label: 'Students', path: '/hr/students', icon: GraduationCap },
           { label: 'Attendance Roster', path: '/hr/attendance', icon: Clock },
           { label: 'Calendar', path: '/calendar', icon: Calendar },
+          { label: 'Assessments', path: '/mentor/assessments', icon: ClipboardList },
+          { label: 'Assessment Evaluation', path: '/mentor/assessment-evaluation', icon: FileSpreadsheet },
+          { label: 'Projects', path: '/mentor/projects', icon: FolderGit2 },
+          { label: 'Scoresheet', path: '/mentor/scoresheet', icon: FileSpreadsheet },
+          { label: 'Trainer Feedback', path: '/hr/trainer-feedback', icon: MessageSquarePlus },
           { label: 'No Dues', path: '/hr/no-dues', icon: FileCheck },
           { label: 'Fees', path: '/hr/fees', icon: IndianRupee },
           { label: 'Letters', path: '/hr/letters', icon: Mail },
@@ -126,6 +140,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           { label: 'Audit Logs', path: '/admin/audit-logs', icon: FileText },
           { label: 'System Settings', path: '/admin/system', icon: Settings },
         ];
+
       default:
         return [];
     }

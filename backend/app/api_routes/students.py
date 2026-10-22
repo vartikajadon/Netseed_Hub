@@ -1,5 +1,6 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, status, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.core.auth import get_current_user
@@ -157,3 +158,61 @@ def delete_student(
     """
     service = StudentService(db)
     return service.delete_student(student_id, actor_id=current_user.id)
+
+
+class CVUploadRequest(BaseModel):
+    cv_url: str
+    cv_file_name: Optional[str] = "Student_Resume.pdf"
+
+
+@router.post("/me/cv", response_model=StudentResponse, summary="Student Upload or Update Resume/CV")
+def upload_my_cv(
+    payload: CVUploadRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Student uploads or updates their CV document in their profile.
+    Available to HR, Mentors, and Super Admins.
+    """
+    from datetime import datetime
+    from app.api_routes.notifications import create_notification
+
+    student = db.query(Student).filter(Student.user_id == current_user.id).first()
+    if not student:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Student profile not found."
+        )
+
+    student.cv_url = payload.cv_url.strip()
+    student.cv_file_name = payload.cv_file_name.strip() if payload.cv_file_name else "Student_Resume.pdf"
+    student.cv_updated_at = datetime.utcnow()
+    student.updated_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(student)
+
+    # Notify Mentor and HR
+    s_name = current_user.full_name
+    mentor_id = student.mentor_id or (student.batch.mentor_id if student.batch else None)
+    if mentor_id:
+        create_notification(
+            db=db,
+            user_id=mentor_id,
+            title=f"CV Uploaded: {s_name}",
+            message=f"{s_name} ({student.roll_number}) uploaded their updated CV / Resume.",
+            notification_type="SYSTEM",
+            link_url="/mentor/students",
+        )
+
+    create_notification(
+        db=db,
+        title=f"Student CV Updated: {s_name}",
+        message=f"{s_name} ({student.roll_number}) updated their Resume / CV document.",
+        notification_type="SYSTEM",
+        target_role="HR",
+        link_url=f"/hr/students/{student.id}",
+    )
+
+    return student

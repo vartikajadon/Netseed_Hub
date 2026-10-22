@@ -94,6 +94,8 @@ class Batch(Base):
     mentor = relationship("User", foreign_keys=[mentor_id])
     students = relationship("Student", back_populates="batch")
     tasks = relationship("Task", back_populates="batch", cascade="all, delete-orphan")
+    assessments = relationship("Assessment", back_populates="batch", cascade="all, delete-orphan")
+
 
 
 class Student(Base):
@@ -126,8 +128,22 @@ class Student(Base):
     dropout_marked_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True) # HR staff actor who recorded dropout
     registered_device_id = Column(String(36), nullable=True)
     face_enrollment_status = Column(String(50), nullable=False, default="NOT_ENROLLED") # 'NOT_ENROLLED', 'PENDING', 'ENROLLED'
+    passout_year = Column(Integer, nullable=True) # Graduation / College completion year
+    cv_url = Column(Text, nullable=True) # Resume / CV document URL or Data URI
+    cv_file_name = Column(String(255), nullable=True) # Original uploaded file name
+    cv_updated_at = Column(DateTime, nullable=True)
+    project_title = Column(String(255), nullable=True) # Mentor-assigned capstone project title
+    project_description = Column(Text, nullable=True) # Mentor-assigned project idea / requirements
+    project_status = Column(String(50), nullable=False, default="NOT_ASSIGNED") # 'NOT_ASSIGNED', 'ASSIGNED', 'IN_PROGRESS', 'SUBMITTED', 'APPROVED'
+    project_assigned_at = Column(DateTime, nullable=True)
+    project_submitted_at = Column(DateTime, nullable=True)
+    project_url = Column(String(500), nullable=True)
+    certificate_approved_by_mentor = Column(Boolean, nullable=False, default=False)
+    certificate_approved_at = Column(DateTime, nullable=True)
+    certificate_approved_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 
     # Relationships
     user = relationship("User", back_populates="student_profile", foreign_keys=[user_id])
@@ -145,7 +161,9 @@ class Student(Base):
     issued_letters = relationship("IssuedLetter", back_populates="student")
     issued_certificates = relationship("IssuedCertificate", back_populates="student")
     task_submissions = relationship("TaskSubmission", back_populates="student", cascade="all, delete-orphan")
+    assessment_submissions = relationship("AssessmentSubmission", back_populates="student", cascade="all, delete-orphan")
     feedbacks = relationship("MentorFeedback", back_populates="student", cascade="all, delete-orphan", order_by="desc(MentorFeedback.created_at)")
+
 
 
 class Device(Base):
@@ -609,6 +627,96 @@ class CurriculumProgress(Base):
     program = relationship("Program")
     batch = relationship("Batch")
     mentor = relationship("User", foreign_keys=[completed_by])
+
+
+class Assessment(Base):
+    __tablename__ = "assessments"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    level = Column(String(50), nullable=False, default="ENTRY_LEVEL")  # 'ENTRY_LEVEL', 'MIDDLE_LEVEL', 'EXIT_LEVEL'
+    batch_id = Column(String(36), ForeignKey("batches.id", ondelete="CASCADE"), nullable=False, index=True)
+    mentor_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    scheduled_date = Column(DateTime, nullable=False)
+    duration_minutes = Column(Integer, nullable=False, default=60)
+    total_marks = Column(Integer, nullable=False, default=100)
+    passing_marks = Column(Integer, nullable=False, default=40)
+    paper_content = Column(Text, nullable=True)  # Direct questions / markdown text
+    paper_file_url = Column(Text, nullable=True)  # Uploaded file / base64 or link
+    paper_file_name = Column(String(255), nullable=True)
+    is_unlocked = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    batch = relationship("Batch", back_populates="assessments")
+    mentor = relationship("User", foreign_keys=[mentor_id])
+    submissions = relationship("AssessmentSubmission", back_populates="assessment", cascade="all, delete-orphan")
+
+
+class AssessmentSubmission(Base):
+    __tablename__ = "assessment_submissions"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    assessment_id = Column(String(36), ForeignKey("assessments.id", ondelete="CASCADE"), nullable=False, index=True)
+    student_id = Column(String(36), ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
+    submission_link = Column(String(500), nullable=False)  # Pasted solution link
+    submission_notes = Column(Text, nullable=True)
+    answer_file_url = Column(Text, nullable=True)
+    answer_file_name = Column(String(255), nullable=True)
+    status = Column(String(50), nullable=False, default="SUBMITTED", index=True)  # 'SUBMITTED', 'EVALUATED'
+    marks_obtained = Column(Numeric(5, 2), nullable=True)
+    feedback = Column(Text, nullable=True)
+    evaluated_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    evaluated_at = Column(DateTime, nullable=True)
+    submitted_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    assessment = relationship("Assessment", back_populates="submissions")
+    student = relationship("Student", back_populates="assessment_submissions")
+    evaluator = relationship("User", foreign_keys=[evaluated_by])
+
+
+class TrainerFeedback(Base):
+    __tablename__ = "trainer_feedbacks"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    student_id = Column(String(36), ForeignKey("students.id", ondelete="CASCADE"), nullable=True, index=True)
+    trainer_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    batch_id = Column(String(36), ForeignKey("batches.id", ondelete="SET NULL"), nullable=True, index=True)
+    is_anonymous = Column(Boolean, nullable=False, default=False)
+
+    # Categories with optional rating (1-5) and/or text comments
+    technical_rating = Column(Integer, nullable=True)
+    technical_text = Column(Text, nullable=True)
+
+    teaching_rating = Column(Integer, nullable=True)
+    teaching_text = Column(Text, nullable=True)
+
+    doubt_solving_rating = Column(Integer, nullable=True)
+    doubt_solving_text = Column(Text, nullable=True)
+
+    practical_guidance_rating = Column(Integer, nullable=True)
+    practical_guidance_text = Column(Text, nullable=True)
+
+    communication_rating = Column(Integer, nullable=True)
+    communication_text = Column(Text, nullable=True)
+
+    # General optional text feedback
+    overall_feedback_text = Column(Text, nullable=True)
+    average_rating = Column(Numeric(3, 2), nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    student = relationship("Student", foreign_keys=[student_id])
+    trainer = relationship("User", foreign_keys=[trainer_id])
+    batch = relationship("Batch", foreign_keys=[batch_id])
+
+
 
 
 
