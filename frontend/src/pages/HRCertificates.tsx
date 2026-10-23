@@ -11,7 +11,7 @@ import { useNotifications } from '../context/NotificationContext';
 import { IssuedCertificate, CertificateCreatePayload, Student } from '../types';
 import {
   Award, Plus, Search, Printer, Download, CheckCircle2,
-  Trash2, ShieldCheck, Sparkles, User, FileText, Eye, QrCode, AlertCircle
+  Trash2, ShieldCheck, Sparkles, User, FileText, Eye, QrCode, AlertCircle, Lock, ShieldAlert
 } from 'lucide-react';
 
 export const HRCertificates: React.FC = () => {
@@ -72,7 +72,9 @@ export const HRCertificates: React.FC = () => {
   const openCreateModal = () => {
     setFormError(null);
     setRecipientType('STUDENT');
-    const firstStudent = students[0];
+    // Prioritize student whose certificate has been approved/released by mentor
+    const approvedStudent = students.find((s) => s.certificate_approved_by_mentor);
+    const firstStudent = approvedStudent || students[0];
     setSelectedStudentId(firstStudent?.id || '');
     setCustomRecipientName('');
     setCustomRollNo('');
@@ -111,6 +113,12 @@ export const HRCertificates: React.FC = () => {
       const st = students.find((s) => s.id === selectedStudentId);
       if (!st) {
         setFormError('Please select a student.');
+        return;
+      }
+      if (!st.certificate_approved_by_mentor) {
+        setFormError(
+          `Certificate creation is locked for ${st.user?.full_name || st.roll_number}. The assigned mentor must first click 'Release Certificate' before HR can issue certificates.`
+        );
         return;
       }
       studentId = st.id;
@@ -422,22 +430,52 @@ export const HRCertificates: React.FC = () => {
             </div>
 
             {recipientType === 'STUDENT' ? (
-              <div>
+              <div className="space-y-2">
                 <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">
-                  Choose Student *
+                  Choose Student <span className="text-rose-500">*</span>
                 </label>
                 <select
                   value={selectedStudentId}
                   onChange={(e) => setSelectedStudentId(e.target.value)}
-                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs"
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-medium"
                   required
                 >
                   {students.map((st) => (
                     <option key={st.id} value={st.id}>
-                      {st.user?.full_name} ({st.roll_number}) - {st.batch?.name || 'No Batch'}
+                      {st.user?.full_name} ({st.roll_number}) — {st.certificate_approved_by_mentor ? '✅ Mentor Approved (Unlocked)' : '🔒 Locked (Awaiting Mentor Approval)'}
                     </option>
                   ))}
                 </select>
+
+                {/* Mentor Approval Indicator */}
+                {(() => {
+                  const currStudent = students.find((s) => s.id === selectedStudentId);
+                  if (!currStudent) return null;
+                  if (currStudent.certificate_approved_by_mentor) {
+                    return (
+                      <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl flex items-center gap-2.5 text-emerald-800 dark:text-emerald-300 text-xs">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <div>
+                          <span className="font-bold">Mentor Certificate Release Approved</span>
+                          <p className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-0.5">
+                            The mentor has officially released the certificate for {currStudent.user?.full_name || currStudent.roll_number}. HR can now issue the certificate.
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="p-3 bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-800 rounded-xl flex items-center gap-2.5 text-amber-900 dark:text-amber-200 text-xs">
+                      <Lock className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                      <div>
+                        <span className="font-bold">Certificate Generation Locked</span>
+                        <p className="text-[11px] text-amber-800 dark:text-amber-300 mt-0.5">
+                          Locked: Awaiting Mentor Approval. The assigned mentor must first click 'Release Certificate' after training completion before HR can create credentials.
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -537,10 +575,32 @@ export const HRCertificates: React.FC = () => {
               <Button type="button" variant="secondary" size="sm" onClick={() => setIsCreateModalOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" variant="primary" size="sm" isLoading={isSubmitting} className="font-bold">
-                <Award className="w-3.5 h-3.5 mr-1" />
-                Issue Certificate
-              </Button>
+              {(() => {
+                const currStudent = recipientType === 'STUDENT' ? students.find((s) => s.id === selectedStudentId) : null;
+                const isLocked = recipientType === 'STUDENT' && !currStudent?.certificate_approved_by_mentor;
+                return (
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="sm"
+                    isLoading={isSubmitting}
+                    disabled={Boolean(isLocked)}
+                    className={`font-bold ${isLocked ? 'opacity-50 cursor-not-allowed bg-slate-400 dark:bg-slate-700' : ''}`}
+                  >
+                    {isLocked ? (
+                      <>
+                        <Lock className="w-3.5 h-3.5 mr-1" />
+                        Locked (Mentor Approval Required)
+                      </>
+                    ) : (
+                      <>
+                        <Award className="w-3.5 h-3.5 mr-1" />
+                        Issue Certificate
+                      </>
+                    )}
+                  </Button>
+                );
+              })()}
             </div>
           </form>
         </Modal>

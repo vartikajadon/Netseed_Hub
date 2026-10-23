@@ -19,6 +19,12 @@ class User(Base):
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_login_at = Column(DateTime, nullable=True)
+    last_login_latitude = Column(Numeric(10, 8), nullable=True)
+    last_login_longitude = Column(Numeric(11, 8), nullable=True)
+    last_logout_at = Column(DateTime, nullable=True)
+    last_logout_latitude = Column(Numeric(10, 8), nullable=True)
+    last_logout_longitude = Column(Numeric(11, 8), nullable=True)
 
     # Relationships
     student_profile = relationship("Student", back_populates="user", uselist=False, foreign_keys="[Student.user_id]", cascade="all, delete-orphan")
@@ -26,6 +32,7 @@ class User(Base):
     consents = relationship("Consent", back_populates="user", foreign_keys="[Consent.user_id]", cascade="all, delete-orphan")
     face_template = relationship("FaceTemplate", back_populates="user", uselist=False, foreign_keys="[FaceTemplate.user_id]", cascade="all, delete-orphan")
     audit_logs = relationship("AuditLog", back_populates="actor", foreign_keys="[AuditLog.actor_id]")
+    location_logs = relationship("UserLocationLog", back_populates="user", cascade="all, delete-orphan", foreign_keys="[UserLocationLog.user_id]")
 
 
 class Geofence(Base):
@@ -249,6 +256,23 @@ class AuditLog(Base):
     actor = relationship("User", back_populates="audit_logs", foreign_keys=[actor_id])
 
 
+class UserLocationLog(Base):
+    __tablename__ = "user_location_logs"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    event_type = Column(String(20), nullable=False)  # 'LOGIN' or 'LOGOUT'
+    latitude = Column(Numeric(10, 8), nullable=True)
+    longitude = Column(Numeric(11, 8), nullable=True)
+    accuracy_meters = Column(Numeric(8, 2), nullable=True)
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(Text, nullable=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    # Relationships
+    user = relationship("User", back_populates="location_logs", foreign_keys=[user_id])
+
+
 class AttendanceEvent(Base):
     __tablename__ = "attendance_events"
 
@@ -380,6 +404,13 @@ class CalendarEvent(Base):
     is_off_day = Column(Boolean, nullable=False, default=False)
     person_name = Column(String(150), nullable=True)  # Student or staff/organization name for birthdays
     student_id = Column(String(36), ForeignKey("students.id", ondelete="CASCADE"), nullable=True, index=True)
+    batch_id = Column(String(36), ForeignKey("batches.id", ondelete="CASCADE"), nullable=True, index=True)
+    target_scope = Column(String(50), nullable=False, default="ALL")  # 'ALL' or 'SPECIFIC_BATCH'
+    start_time = Column(DateTime, nullable=True)  # Scheduled start datetime
+    end_time = Column(DateTime, nullable=True)    # Expiration datetime
+    duration_minutes = Column(Integer, nullable=True)  # Display duration in minutes
+    is_recurring = Column(Boolean, nullable=False, default=False)
+    recurrence_pattern = Column(String(50), nullable=True)  # 'NONE', 'DAILY', 'WEEKLY'
     created_by = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -646,6 +677,7 @@ class Assessment(Base):
     paper_file_url = Column(Text, nullable=True)  # Uploaded file / base64 or link
     paper_file_name = Column(String(255), nullable=True)
     is_unlocked = Column(Boolean, nullable=False, default=False)
+    skill_unlocked = Column(String(255), nullable=True)  # Skill title/level earned upon successfully passing this assessment
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

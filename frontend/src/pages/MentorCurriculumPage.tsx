@@ -105,6 +105,17 @@ export const MentorCurriculumPage: React.FC = () => {
     (b) => !b.program_id || b.program_id === selectedProgramId
   );
 
+  useEffect(() => {
+    if (availableBatches.length > 0) {
+      const exists = availableBatches.some((b) => b.id === selectedBatchId);
+      if (!exists) {
+        setSelectedBatchId(availableBatches[0].id);
+      }
+    } else {
+      setSelectedBatchId('');
+    }
+  }, [selectedProgramId, batches, selectedBatchId]);
+
   const handleOpenUpdateModal = (topic: CurriculumTopicItem) => {
     setSelectedTopic(topic);
     setIsCompletedStatus(topic.is_completed ? true : true);
@@ -223,14 +234,18 @@ export const MentorCurriculumPage: React.FC = () => {
               <select
                 value={selectedBatchId}
                 onChange={(e) => setSelectedBatchId(e.target.value)}
+                disabled={availableBatches.length === 0}
                 className="px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
               >
-                <option value="">Standard / All Batches</option>
-                {availableBatches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
+                {availableBatches.length === 0 ? (
+                  <option value="" disabled>No Batches Available</option>
+                ) : (
+                  availableBatches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))
+                )}
               </select>
             </div>
           </div>

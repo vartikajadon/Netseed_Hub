@@ -7,7 +7,7 @@ from sqlalchemy import extract
 
 from app.database.session import get_db
 from app.core.permissions import get_current_user, require_role
-from app.models.all_models import User, CalendarEvent, Student, Notification
+from app.models.all_models import User, CalendarEvent, Student, Notification, Batch
 from app.services.notification_service import create_notification
 from app.schemas.calendar_schemas import (
     CalendarEventCreate, CalendarEventUpdate, CalendarEventResponse
@@ -513,18 +513,65 @@ def list_calendar_events(
         q = q.filter(CalendarEvent.is_off_day == is_off_day)
 
     events = q.order_by(CalendarEvent.date.asc(), CalendarEvent.title.asc()).all()
-    return [CalendarEventResponse.model_validate(e) for e in events]
+
+    # Filter for student: students only see broadcasts for their own batch or ALL batches
+    student_batch_id = None
+    if current_user.role == "STUDENT":
+        student = db.query(Student).filter(Student.user_id == current_user.id).first()
+        student_batch_id = student.batch_id if student else None
+
+    result = []
+    now = datetime.utcnow()
+    for e in events:
+        # Check student broadcast visibility
+        if current_user.role == "STUDENT" and e.event_type == "BROADCAST":
+            if e.target_scope == "SPECIFIC_BATCH" and e.batch_id and e.batch_id != student_batch_id:
+                continue
+
+        batch_name = None
+        if e.batch_id:
+            b = db.query(Batch).filter(Batch.id == e.batch_id).first()
+            batch_name = b.name if b else None
+
+        # Check if broadcast is active right now
+        is_active = False
+        if e.event_type == "BROADCAST":
+            if e.start_time and e.end_time:
+                is_active = (e.start_time <= now <= e.end_time)
+            elif e.start_time:
+                dur = e.duration_minutes or 60
+                is_active = (e.start_time <= now <= e.start_time + timedelta(minutes=dur))
+            else:
+                is_active = (e.date == now.date())
+
+        item = CalendarEventResponse.model_validate(e)
+        item.batch_name = batch_name
+        item.is_active_broadcast = is_active
+        result.append(item)
+
+    return result
 
 
-@router.post("/events", response_model=CalendarEventResponse, status_code=status.HTTP_201_CREATED, summary="Create Calendar Event")
+@router.post("/events", response_model=CalendarEventResponse, status_code=status.HTTP_201_CREATED, summary="Create Calendar Event or Broadcast Message")
 def create_calendar_event(
     payload: CalendarEventCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(["HR", "SUPER_ADMIN"]))
 ):
     """
-    HR/Admin endpoint to create a calendar event, festival, company off-day, or birthday announcement.
+    HR/Admin endpoint to create a calendar event, festival, company off-day, birthday announcement,
+    or scheduled broadcast message (for all batches or specific batch with fixed duration & recurrence).
     """
+    start_dt = payload.start_time
+    duration_mins = payload.duration_minutes or 60
+    end_dt = payload.end_time
+    if start_dt and not end_dt:
+        end_dt = start_dt + timedelta(minutes=duration_mins)
+
+    batch = None
+    if payload.event_type.upper() == "BROADCAST" and payload.target_scope == "SPECIFIC_BATCH" and payload.batch_id:
+        batch = db.query(Batch).filter(Batch.id == payload.batch_id).first()
+
     event = CalendarEvent(
         id=str(uuid.uuid4()),
         title=payload.title.strip(),
@@ -533,14 +580,84 @@ def create_calendar_event(
         event_type=payload.event_type.upper(),
         is_off_day=payload.is_off_day,
         person_name=payload.person_name.strip() if payload.person_name else None,
+        batch_id=payload.batch_id,
+        target_scope=payload.target_scope or "ALL",
+        start_time=start_dt,
+        end_time=end_dt,
+        duration_minutes=duration_mins,
+        is_recurring=bool(payload.is_recurring),
+        recurrence_pattern=payload.recurrence_pattern,
         created_by=current_user.id,
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow()
     )
     db.add(event)
+
+    # Support multiple time / recurring broadcast event where all instances are fixed on creation
+    if payload.event_type.upper() == "BROADCAST" and payload.is_recurring and payload.recurrence_pattern:
+        pattern = payload.recurrence_pattern.upper()
+        steps = 4
+        for i in range(1, steps + 1):
+            if pattern == "DAILY":
+                rec_date = payload.date + timedelta(days=i)
+                rec_start = (start_dt + timedelta(days=i)) if start_dt else None
+                rec_end = (end_dt + timedelta(days=i)) if end_dt else None
+            elif pattern == "WEEKLY":
+                rec_date = payload.date + timedelta(weeks=i)
+                rec_start = (start_dt + timedelta(weeks=i)) if start_dt else None
+                rec_end = (end_dt + timedelta(weeks=i)) if end_dt else None
+            else:
+                break
+
+            rec_event = CalendarEvent(
+                id=str(uuid.uuid4()),
+                title=f"{payload.title.strip()} (Recurring)",
+                description=payload.description.strip() if payload.description else None,
+                date=rec_date,
+                event_type="BROADCAST",
+                is_off_day=payload.is_off_day,
+                batch_id=payload.batch_id,
+                target_scope=payload.target_scope or "ALL",
+                start_time=rec_start,
+                end_time=rec_end,
+                duration_minutes=duration_mins,
+                is_recurring=True,
+                recurrence_pattern=pattern,
+                created_by=current_user.id,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
+            db.add(rec_event)
+
     db.commit()
     db.refresh(event)
-    return CalendarEventResponse.model_validate(event)
+
+    # Dispatch in-app broadcast notifications
+    if payload.event_type.upper() == "BROADCAST":
+        target_label = batch.name if batch else "All Trainees"
+        scope_title = f"📢 Broadcast ({target_label}): {payload.title.strip()}"
+        time_info = f" Scheduled for {payload.date.isoformat()}"
+        if start_dt:
+            time_info += f" at {start_dt.strftime('%H:%M')} (Duration: {duration_mins} mins)"
+
+        student_query = db.query(Student)
+        if payload.target_scope == "SPECIFIC_BATCH" and payload.batch_id:
+            student_query = student_query.filter(Student.batch_id == payload.batch_id)
+
+        target_students = student_query.all()
+        for s in target_students:
+            create_notification(
+                db=db,
+                user_id=s.user_id,
+                title=scope_title,
+                message=f"Announcement from HR: {payload.description or payload.title}.{time_info}",
+                notification_type="SYSTEM",
+                link_url="/calendar",
+            )
+
+    resp = CalendarEventResponse.model_validate(event)
+    resp.batch_name = batch.name if batch else None
+    return resp
 
 
 @router.put("/events/{event_id}", response_model=CalendarEventResponse, summary="Update Calendar Event")
@@ -551,7 +668,7 @@ def update_calendar_event(
     current_user: User = Depends(require_role(["HR", "SUPER_ADMIN"]))
 ):
     """
-    Update an existing calendar event.
+    Update an existing calendar event or broadcast.
     """
     event = db.query(CalendarEvent).filter(CalendarEvent.id == event_id).first()
     if not event:
@@ -569,11 +686,35 @@ def update_calendar_event(
         event.is_off_day = payload.is_off_day
     if payload.person_name is not None:
         event.person_name = payload.person_name.strip() if payload.person_name else None
+    if payload.batch_id is not None:
+        event.batch_id = payload.batch_id
+    if payload.target_scope is not None:
+        event.target_scope = payload.target_scope
+    if payload.start_time is not None:
+        event.start_time = payload.start_time
+    if payload.duration_minutes is not None:
+        event.duration_minutes = payload.duration_minutes
+        if event.start_time:
+            event.end_time = event.start_time + timedelta(minutes=payload.duration_minutes)
+    if payload.end_time is not None:
+        event.end_time = payload.end_time
+    if payload.is_recurring is not None:
+        event.is_recurring = payload.is_recurring
+    if payload.recurrence_pattern is not None:
+        event.recurrence_pattern = payload.recurrence_pattern
 
     event.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(event)
-    return CalendarEventResponse.model_validate(event)
+
+    batch_name = None
+    if event.batch_id:
+        b = db.query(Batch).filter(Batch.id == event.batch_id).first()
+        batch_name = b.name if b else None
+
+    resp = CalendarEventResponse.model_validate(event)
+    resp.batch_name = batch_name
+    return resp
 
 
 @router.delete("/events/{event_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete Calendar Event")

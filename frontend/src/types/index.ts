@@ -10,6 +10,24 @@ export interface User {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  last_login_at?: string | null;
+  last_login_latitude?: number | null;
+  last_login_longitude?: number | null;
+  last_logout_at?: string | null;
+  last_logout_latitude?: number | null;
+  last_logout_longitude?: number | null;
+}
+
+export interface UserLocationLog {
+  id: string;
+  user_id: string;
+  event_type: 'LOGIN' | 'LOGOUT';
+  latitude?: number | null;
+  longitude?: number | null;
+  accuracy_meters?: number | null;
+  ip_address?: string | null;
+  user_agent?: string | null;
+  timestamp: string;
 }
 
 export type StudentStatus = 'ENROLLED' | 'ACTIVE' | 'ON_LEAVE' | 'COMPLETED' | 'DROPPED' | 'DROPOUT' | 'GRADUATED' | 'TERMINATED';
@@ -95,6 +113,9 @@ export interface Student {
   project_url?: string | null;
   project_assigned_at?: string | null;
   project_submitted_at?: string | null;
+  certificate_approved_by_mentor?: boolean | null;
+  certificate_approved_at?: string | null;
+  certificate_approved_by?: string | null;
   user?: User | null;
   program?: Program | null;
   batch?: Batch | null;
@@ -630,10 +651,19 @@ export interface CalendarEvent {
   title: string;
   description?: string | null;
   date: string;
-  event_type: 'FESTIVAL' | 'OFF_DAY' | 'BIRTHDAY' | 'EVENT' | string;
+  event_type: 'FESTIVAL' | 'OFF_DAY' | 'BIRTHDAY' | 'EVENT' | 'BROADCAST' | string;
   is_off_day: boolean;
   person_name?: string | null;
   student_id?: string | null;
+  batch_id?: string | null;
+  batch_name?: string | null;
+  target_scope?: 'ALL' | 'SPECIFIC_BATCH' | string;
+  start_time?: string | null;
+  end_time?: string | null;
+  duration_minutes?: number | null;
+  is_recurring?: boolean;
+  recurrence_pattern?: 'DAILY' | 'WEEKLY' | string | null;
+  is_active_broadcast?: boolean;
   created_by?: string | null;
   created_at: string;
   updated_at: string;
@@ -647,6 +677,13 @@ export interface CalendarEventCreatePayload {
   is_off_day: boolean;
   person_name?: string;
   student_id?: string;
+  batch_id?: string;
+  target_scope?: 'ALL' | 'SPECIFIC_BATCH' | string;
+  start_time?: string;
+  end_time?: string;
+  duration_minutes?: number;
+  is_recurring?: boolean;
+  recurrence_pattern?: string;
 }
 
 export interface BirthdayReminderItem {
@@ -1098,6 +1135,7 @@ export interface Assessment {
   paper_content?: string | null;
   paper_file_url?: string | null;
   paper_file_name?: string | null;
+  skill_unlocked?: string | null;
   is_unlocked: boolean;
   is_visible_to_student: boolean;
   can_attempt: boolean;
@@ -1130,6 +1168,39 @@ export interface AssessmentCreatePayload {
   paper_content?: string;
   paper_file_url?: string;
   paper_file_name?: string;
+  skill_unlocked?: string;
+}
+
+export interface StudentCurriculumSkillItem {
+  id: string;
+  skill_name: string;
+  module_name: string;
+  level: 'ENTRY_LEVEL' | 'MIDDLE_LEVEL' | 'EXIT_LEVEL';
+  level_label: 'Beginner' | 'Intermediate' | 'Advanced';
+  is_unlocked: boolean;
+  status: 'UNLOCKED' | 'LOCKED';
+  unlocked_at?: string | null;
+  unlocked_by_name?: string | null;
+  assessment_id?: string | null;
+  assessment_title?: string | null;
+  marks_obtained?: number | null;
+  total_marks?: number | null;
+  passing_marks?: number | null;
+  score_percentage?: number | null;
+  description?: string | null;
+}
+
+export interface StudentCurriculumSkillsResponse {
+  program_id?: string | null;
+  program_title?: string | null;
+  batch_name?: string | null;
+  student_name: string;
+  student_roll_no: string;
+  total_skills: number;
+  unlocked_skills: number;
+  locked_skills: number;
+  completion_percentage: number;
+  skills: StudentCurriculumSkillItem[];
 }
 
 export interface AssessmentSubmission {

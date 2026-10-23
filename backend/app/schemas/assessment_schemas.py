@@ -14,6 +14,7 @@ class AssessmentBase(BaseModel):
     paper_content: Optional[str] = None
     paper_file_url: Optional[str] = None
     paper_file_name: Optional[str] = None
+    skill_unlocked: Optional[str] = None
 
 class AssessmentCreate(AssessmentBase):
     pass
@@ -30,6 +31,7 @@ class AssessmentUpdate(BaseModel):
     paper_content: Optional[str] = None
     paper_file_url: Optional[str] = None
     paper_file_name: Optional[str] = None
+    skill_unlocked: Optional[str] = None
     is_unlocked: Optional[bool] = None
 
 class AssessmentUnlockToggle(BaseModel):
@@ -51,6 +53,7 @@ class AssessmentResponse(BaseModel):
     paper_content: Optional[str] = None
     paper_file_url: Optional[str] = None
     paper_file_name: Optional[str] = None
+    skill_unlocked: Optional[str] = None
     is_unlocked: bool
     is_visible_to_student: bool = True
     can_attempt: bool = False
@@ -60,6 +63,36 @@ class AssessmentResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+class StudentCurriculumSkillItem(BaseModel):
+    id: str
+    skill_name: str
+    module_name: str
+    level: str  # ENTRY_LEVEL, MIDDLE_LEVEL, EXIT_LEVEL
+    level_label: str  # Beginner, Intermediate, Advanced
+    is_unlocked: bool
+    status: str  # 'UNLOCKED', 'LOCKED'
+    unlocked_at: Optional[datetime] = None
+    unlocked_by_name: Optional[str] = None
+    assessment_id: Optional[str] = None
+    assessment_title: Optional[str] = None
+    marks_obtained: Optional[float] = None
+    total_marks: Optional[int] = None
+    passing_marks: Optional[int] = None
+    score_percentage: Optional[float] = None
+    description: Optional[str] = None
+
+class StudentCurriculumSkillsResponse(BaseModel):
+    program_id: Optional[str] = None
+    program_title: Optional[str] = None
+    batch_name: Optional[str] = None
+    student_name: str
+    student_roll_no: str
+    total_skills: int
+    unlocked_skills: int
+    locked_skills: int
+    completion_percentage: float
+    skills: List[StudentCurriculumSkillItem]
 
 class AssessmentSubmissionCreate(BaseModel):
     submission_link: str = Field(..., max_length=500, description="Link to assessment solution repository, document, or code")

@@ -211,9 +211,9 @@ def test_letters_workflow(client, auth_headers, setup_student):
 
 def test_certificates_workflow(client, auth_headers, setup_student):
     hr_headers = auth_headers("HR", "usr-hr-001")
+    mentor_headers = auth_headers("MENTOR", "usr-men-001")
     student_headers = auth_headers("STUDENT", "usr-student-001")
 
-    # 1. HR issues certificate with credential ID
     cert_payload = {
         "title": "Certificate of Excellence in Cloud Architecture",
         "certificate_type": "EXCELLENCE",
@@ -224,11 +224,23 @@ def test_certificates_workflow(client, auth_headers, setup_student):
         "credential_id": "NETSEED-CERT-2026-SE01",
         "description": "Recognizing top 5% performance in microservices development."
     }
+
+    # 1. Before mentor approval, certificate issuance by HR is locked (HTTP 400)
+    locked_res = client.post("/api/v1/certificates", json=cert_payload, headers=hr_headers)
+    assert locked_res.status_code == 400
+    assert "locked" in locked_res.json()["detail"].lower()
+
+    # 2. Mentor approves certificate release for student
+    release_res = client.put("/api/v1/students/st-test-001/release-certificate", json={"approve": True}, headers=mentor_headers)
+    assert release_res.status_code == 200
+    assert release_res.json()["certificate_approved_by_mentor"] is True
+
+    # 3. Now HR can successfully issue the certificate
     cert_res = client.post("/api/v1/certificates", json=cert_payload, headers=hr_headers)
     assert cert_res.status_code == 201
     assert cert_res.json()["status"] == "ISSUED"
 
-    # 2. Student retrieves certificates
+    # 4. Student retrieves certificates
     my_certs_res = client.get("/api/v1/certificates/my-certificates", headers=student_headers)
     assert my_certs_res.status_code == 200
     assert len(my_certs_res.json()) >= 1

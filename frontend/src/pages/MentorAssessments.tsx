@@ -75,6 +75,7 @@ export const MentorAssessments: React.FC = () => {
   const [paperContent, setPaperContent] = useState('');
   const [paperFileName, setPaperFileName] = useState('');
   const [paperFileUrl, setPaperFileUrl] = useState('');
+  const [skillUnlocked, setSkillUnlocked] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -123,6 +124,7 @@ export const MentorAssessments: React.FC = () => {
     setPaperContent('');
     setPaperFileName('');
     setPaperFileUrl('');
+    setSkillUnlocked('');
     setFormError(null);
     setIsModalOpen(true);
   };
@@ -144,6 +146,7 @@ export const MentorAssessments: React.FC = () => {
     setPaperContent(a.paper_content || '');
     setPaperFileName(a.paper_file_name || '');
     setPaperFileUrl(a.paper_file_url || '');
+    setSkillUnlocked(a.skill_unlocked || '');
     setFormError(null);
     setIsModalOpen(true);
   };
@@ -200,6 +203,7 @@ export const MentorAssessments: React.FC = () => {
         paper_content: paperContent.trim() || undefined,
         paper_file_name: paperFileName || undefined,
         paper_file_url: paperFileUrl || undefined,
+        skill_unlocked: skillUnlocked.trim() || undefined,
       };
 
       if (editingAssessment) {
@@ -542,6 +546,22 @@ export const MentorAssessments: React.FC = () => {
                       </span>
                     </div>
 
+                    <div className="flex items-center justify-between text-slate-600 dark:text-slate-400">
+                      <span className="flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                        <span>Unlocks Skill:</span>
+                      </span>
+                      <span className="font-semibold text-slate-900 dark:text-slate-200 truncate max-w-[170px]" title={a.skill_unlocked || 'None set'}>
+                        {a.skill_unlocked ? (
+                          <span className="text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.5 rounded border border-indigo-200/60 dark:border-indigo-800/60 text-[11px]">
+                            {a.skill_unlocked}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 italic font-normal text-[11px]">None configured</span>
+                        )}
+                      </span>
+                    </div>
+
                     {/* Prominent Lock / Unlock Controller */}
                     <div className="pt-2">
                       <button
@@ -690,6 +710,39 @@ export const MentorAssessments: React.FC = () => {
                 onChange={(e) => setTitle(e.target.value)}
                 className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
               />
+            </div>
+
+            {/* Skill Unlocked Upon Passing */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                  Skill Credential Unlocked <span className="text-slate-400 font-normal lowercase">(awarded upon passing)</span>
+                </label>
+                <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium">Curriculum Aligned</span>
+              </div>
+              <input
+                type="text"
+                placeholder="e.g., Python Beginner: Syntax & Fundamentals"
+                value={skillUnlocked}
+                onChange={(e) => setSkillUnlocked(e.target.value)}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+              />
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {[
+                  level === 'ENTRY_LEVEL' ? 'Python Beginner: Syntax & Fundamentals' : level === 'MIDDLE_LEVEL' ? 'Python Intermediate: OOP & Data Structures' : 'Python Advanced: Frameworks & APIs',
+                  level === 'ENTRY_LEVEL' ? 'Web Programming Basics (Beginner)' : level === 'MIDDLE_LEVEL' ? 'FastAPI Microservices (Intermediate)' : 'Cloud DevOps & CI/CD (Advanced)',
+                  'Database Engineering & SQL'
+                ].map((sug) => (
+                  <button
+                    key={sug}
+                    type="button"
+                    onClick={() => setSkillUnlocked(sug)}
+                    className="text-[10px] px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 font-medium transition-colors cursor-pointer"
+                  >
+                    + {sug}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Instructions / Description */}

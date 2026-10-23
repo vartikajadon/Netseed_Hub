@@ -294,6 +294,18 @@ export const StudentAssessments: React.FC = () => {
                           </span>
                         </div>
 
+                        {a.skill_unlocked && (
+                          <div className="flex items-center justify-between text-slate-600 dark:text-slate-400">
+                            <span className="flex items-center gap-1.5">
+                              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                              <span>Unlocks Skill:</span>
+                            </span>
+                            <span className="font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded text-[11px] border border-indigo-200/60 dark:border-indigo-800/60 truncate max-w-[170px]" title={a.skill_unlocked}>
+                              {a.skill_unlocked}
+                            </span>
+                          </div>
+                        )}
+
                         {/* Submission status banner if submitted */}
                         {isSubmitted && (
                           <div className="mt-2 p-2.5 rounded-xl border border-indigo-100 dark:border-indigo-900 bg-indigo-50/60 dark:bg-indigo-950/40">

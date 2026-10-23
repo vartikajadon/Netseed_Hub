@@ -25,6 +25,26 @@ class UserResponse(UserBase):
     id: str
     created_at: datetime
     updated_at: datetime
+    last_login_at: Optional[datetime] = None
+    last_login_latitude: Optional[float] = None
+    last_login_longitude: Optional[float] = None
+    last_logout_at: Optional[datetime] = None
+    last_logout_latitude: Optional[float] = None
+    last_logout_longitude: Optional[float] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UserLocationLogResponse(BaseModel):
+    id: str
+    user_id: str
+    event_type: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    accuracy_meters: Optional[float] = None
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+    timestamp: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -195,6 +215,9 @@ class StudentBase(BaseModel):
     project_url: Optional[str] = None
     project_assigned_at: Optional[datetime] = None
     project_submitted_at: Optional[datetime] = None
+    certificate_approved_by_mentor: Optional[bool] = False
+    certificate_approved_at: Optional[datetime] = None
+    certificate_approved_by: Optional[str] = None
 
 class StudentCreate(BaseModel):
     user_id: Optional[str] = None
@@ -294,6 +317,9 @@ class StudentUpdate(BaseModel):
     project_description: Optional[str] = None
     project_status: Optional[str] = None
     project_url: Optional[str] = None
+    certificate_approved_by_mentor: Optional[bool] = False
+    certificate_approved_at: Optional[datetime] = None
+    certificate_approved_by: Optional[str] = None
 
     @field_validator("program_id", "batch_id", "mentor_id", "college_name", "qualification", "contact_number", "guardian_name", "marital_status", "address", "domicile", "batch_type", "payment_mode", "installment_type", "enrollment_status", mode="before")
     @classmethod

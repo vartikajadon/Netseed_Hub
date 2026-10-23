@@ -7,18 +7,21 @@ import { Button } from '../components/Button';
 import { Loading } from '../components/Loading';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { MentorFeedbackModal } from '../components/MentorFeedbackModal';
+import { useNotifications } from '../context/NotificationContext';
 import { api } from '../api/client';
 import { Student, Batch, PaginatedStudentList, MentorFeedbackItem } from '../types';
 import {
-  Users, Search, MessageSquare, PlusCircle, Star, Filter, RefreshCw, FileText
+  Users, Search, MessageSquare, PlusCircle, Star, Filter, RefreshCw, FileText, Award, CheckCircle2
 } from 'lucide-react';
 
 export const MentorStudentsPage: React.FC = () => {
+  const { addToast } = useNotifications();
   const [students, setStudents] = useState<Student[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [feedbacks, setFeedbacks] = useState<MentorFeedbackItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [updatingCertId, setUpdatingCertId] = useState<string | null>(null);
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -60,6 +63,33 @@ export const MentorStudentsPage: React.FC = () => {
 
   const handleFeedbackSubmitted = (newFeedback: MentorFeedbackItem) => {
     setFeedbacks((prev) => [newFeedback, ...prev]);
+  };
+
+  const handleToggleCertificate = async (student: Student, approve: boolean) => {
+    try {
+      setUpdatingCertId(student.id);
+      await api.put(`/students/${student.id}/release-certificate`, { approve });
+      addToast({
+        type: 'success',
+        title: approve ? 'Certificate Released' : 'Release Revoked',
+        message: approve
+          ? `Certificate release approved for ${student.user?.full_name || student.roll_number}. HR has been unlocked to generate and issue the certificate.`
+          : `Certificate release approval revoked for ${student.user?.full_name || student.roll_number}.`,
+      });
+      setStudents((prev) =>
+        prev.map((s) =>
+          s.id === student.id ? { ...s, certificate_approved_by_mentor: approve } : s
+        )
+      );
+    } catch (err: any) {
+      addToast({
+        type: 'error',
+        title: 'Certification Error',
+        message: err.message || 'Failed to update certificate approval status.',
+      });
+    } finally {
+      setUpdatingCertId(null);
+    }
   };
 
   const studentFeedbackMap = useMemo(() => {
@@ -202,6 +232,40 @@ export const MentorStudentsPage: React.FC = () => {
           </div>
         );
       },
+    },
+    {
+      header: 'Certificate Release',
+      accessor: (item) => (
+        <div className="flex items-center gap-1.5">
+          {item.certificate_approved_by_mentor ? (
+            <div className="inline-flex items-center gap-1.5">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 shadow-xs">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                Released
+              </span>
+              <button
+                type="button"
+                onClick={() => handleToggleCertificate(item, false)}
+                disabled={updatingCertId === item.id}
+                className="text-[10px] text-slate-400 hover:text-rose-600 underline font-medium"
+              >
+                Revoke
+              </button>
+            </div>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleToggleCertificate(item, true)}
+              isLoading={updatingCertId === item.id}
+              className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 shadow-xs px-2.5 py-1"
+            >
+              <Award className="w-3.5 h-3.5 mr-1 text-emerald-600" />
+              Release Certificate
+            </Button>
+          )}
+        </div>
+      ),
     },
     {
       header: 'Actions',

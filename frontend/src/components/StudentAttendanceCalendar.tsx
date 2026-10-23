@@ -292,9 +292,9 @@ export const StudentAttendanceCalendar: React.FC<StudentAttendanceCalendarProps>
             <PartyPopper className="w-3.5 h-3.5 text-indigo-500" />
             Festivals
           </span>
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60 font-bold text-[11px]">
-            <Palmtree className="w-3.5 h-3.5 text-rose-500" />
-            Off Days & Weekends (Sat/Sun)
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 font-bold text-[11px]">
+            <Palmtree className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+            Weekends (Sat/Sun) & Holidays
           </span>
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 font-bold text-[11px]">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
@@ -303,22 +303,22 @@ export const StudentAttendanceCalendar: React.FC<StudentAttendanceCalendarProps>
         </div>
       </div>
 
-      {/* Institutional Policy Banner: Saturdays and Sundays are Off */}
-      <div className="px-4 py-2.5 bg-rose-50/70 dark:bg-rose-950/30 border border-rose-200/80 dark:border-rose-900/50 rounded-2xl flex items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-2 text-rose-900 dark:text-rose-200 font-medium">
-          <Palmtree className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
+      {/* Institutional Schedule Banner: Saturdays and Sundays are Off (Neutral Professional Gray) */}
+      <div className="px-4 py-2.5 bg-slate-100/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl flex items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300 font-medium">
+          <Palmtree className="w-4 h-4 text-slate-500 dark:text-slate-400 shrink-0" />
           <span>
-            <strong>Institutional Policy:</strong> All Saturdays and Sundays are designated off days for everyone. Attendance marking is unavailable on weekends.
+            <strong className="text-slate-900 dark:text-slate-100">Institutional Schedule:</strong> Saturdays and Sundays are regular weekly off days (marked in gray). Working attendance schedule applies Monday through Friday.
           </span>
         </div>
-        <span className="hidden sm:inline-block px-2 py-0.5 rounded-md bg-rose-200/60 dark:bg-rose-900/60 text-rose-900 dark:text-rose-100 font-bold text-[10px] uppercase shrink-0">
+        <span className="hidden sm:inline-block px-2 py-0.5 rounded-md bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-[10px] uppercase shrink-0 border border-slate-300/60 dark:border-slate-700">
           Weekly Off
         </span>
       </div>
 
       {isLoading && <Loading message="Loading monthly attendance calendar and events..." />}
       {error && (
-        <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs font-medium">
+        <div className="p-4 rounded-2xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-rose-600 dark:text-rose-400 text-xs font-medium">
           {error}
         </div>
       )}
@@ -326,23 +326,23 @@ export const StudentAttendanceCalendar: React.FC<StudentAttendanceCalendarProps>
       {/* Main Calendar View */}
       {!isLoading && (
         <div className="space-y-2">
-          {/* Day Names Header Row: Sun and Sat highlighted in Rose */}
+          {/* Day Names Header Row: Sun and Sat in subtle professional gray */}
           <div className="grid grid-cols-7 gap-1.5 sm:gap-2 mb-1">
             {DAY_NAMES.map((name, i) => {
               const isWeekend = i === 0 || i === 6;
               return (
                 <div
                   key={name}
-                  className={`text-center py-2 text-xs font-black uppercase tracking-wider rounded-xl ${
+                  className={`text-center py-2 text-xs uppercase tracking-wider rounded-xl ${
                     isWeekend
-                      ? 'text-rose-600 dark:text-rose-400 bg-rose-50/50 dark:bg-rose-950/20'
-                      : 'text-slate-500 dark:text-slate-400'
+                      ? 'text-slate-500 dark:text-slate-400 bg-slate-100/70 dark:bg-slate-800/50 font-bold border border-slate-200/50 dark:border-slate-800/50'
+                      : 'text-slate-700 dark:text-slate-300 font-black'
                   }`}
                 >
                   <span>{name}</span>
                   {isWeekend && (
-                    <span className="block text-[9px] font-bold text-rose-500 lowercase tracking-normal">
-                      (off)
+                    <span className="block text-[9px] font-semibold text-slate-400 dark:text-slate-500 lowercase tracking-normal">
+                      (weekend)
                     </span>
                   )}
                 </div>
@@ -379,9 +379,9 @@ export const StudentAttendanceCalendar: React.FC<StudentAttendanceCalendarProps>
                       ? 'border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/30 ring-2 ring-indigo-500/30'
                       : slot.isCurrentMonth
                       ? isWeekendOff
-                        ? 'border-rose-200/70 dark:border-rose-900/40 bg-rose-50/30 dark:bg-rose-950/15 hover:border-rose-300'
+                        ? 'border-slate-200/70 dark:border-slate-800/60 bg-slate-100/60 dark:bg-slate-800/30 hover:border-slate-300 dark:hover:border-slate-700'
                         : hasOffDayEvent
-                        ? 'border-rose-200/80 dark:border-rose-900/50 bg-rose-50/40 dark:bg-rose-950/20 hover:border-rose-300'
+                        ? 'border-indigo-200/80 dark:border-indigo-900/50 bg-indigo-50/30 dark:bg-indigo-950/20 hover:border-indigo-300'
                         : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:border-indigo-300 dark:hover:border-indigo-700'
                       : 'border-slate-100 dark:border-slate-800/40 bg-slate-50/40 dark:bg-slate-950/10 opacity-35'
                   }`}
@@ -392,8 +392,10 @@ export const StudentAttendanceCalendar: React.FC<StudentAttendanceCalendarProps>
                       className={`text-[10px] sm:text-xs font-black w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center shrink-0 ${
                         slot.isToday
                           ? 'bg-indigo-600 text-white font-bold'
-                          : isOffDay
-                          ? 'text-rose-600 dark:text-rose-400 font-bold'
+                          : isWeekendOff
+                          ? 'text-slate-500 dark:text-slate-400 font-bold'
+                          : hasOffDayEvent
+                          ? 'text-indigo-600 dark:text-indigo-400 font-bold'
                           : slot.isCurrentMonth
                           ? 'text-slate-800 dark:text-slate-200'
                           : 'text-slate-400'
@@ -405,9 +407,9 @@ export const StudentAttendanceCalendar: React.FC<StudentAttendanceCalendarProps>
                     {/* Status indicator on Mobile (compact dot) */}
                     <div className="flex sm:hidden items-center gap-0.5">
                       {isWeekendOff ? (
-                        <span className="w-2 h-2 rounded-full bg-rose-400" title="Weekend Off" />
+                        <span className="w-2 h-2 rounded-full bg-slate-400 dark:bg-slate-500" title="Weekend Off" />
                       ) : hasOffDayEvent ? (
-                        <span className="w-2 h-2 rounded-full bg-rose-500" title="Holiday" />
+                        <span className="w-2 h-2 rounded-full bg-indigo-500" title="Holiday" />
                       ) : isFutureDate ? null : record ? (
                         <span
                           className={`w-2 h-2 rounded-full ${
@@ -425,11 +427,11 @@ export const StudentAttendanceCalendar: React.FC<StudentAttendanceCalendarProps>
                     {/* Status Pills on Tablet & Desktop */}
                     <div className="hidden sm:block">
                       {isWeekendOff ? (
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-100 dark:bg-rose-950/70 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800 uppercase tracking-tight shrink-0">
-                          Off
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-300/60 dark:border-slate-700 uppercase tracking-tight shrink-0">
+                          Weekend
                         </span>
                       ) : hasOffDayEvent ? (
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-100 dark:bg-rose-950/70 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800 uppercase tracking-tight shrink-0">
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 uppercase tracking-tight shrink-0">
                           Holiday
                         </span>
                       ) : isFutureDate ? null : record ? (

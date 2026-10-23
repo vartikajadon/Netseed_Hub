@@ -26,8 +26,8 @@ def serialize_trainer_feedback(
     trainer = db.query(User).filter(User.id == tf.trainer_id).first()
     batch = db.query(Batch).filter(Batch.id == tf.batch_id).first() if tf.batch_id else None
 
-    # Mask student identity if feedback is anonymous AND viewer is the trainer or mentor
-    is_masked = bool(tf.is_anonymous) and (viewer.role == "MENTOR")
+    # Mask student identity if feedback is anonymous AND viewer is not SUPER_ADMIN
+    is_masked = bool(tf.is_anonymous) and (viewer.role != "SUPER_ADMIN")
     if is_masked:
         student_id = None
         student_name = "Anonymous Trainee"

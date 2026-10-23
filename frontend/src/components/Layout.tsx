@@ -76,7 +76,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           { label: 'Tasks', path: '/student/tasks', icon: CheckSquare },
           { label: 'Assessments', path: '/student/assessments', icon: ClipboardList },
           { label: 'Skills', path: '/student/skills', icon: Sparkles },
-          { label: 'Career', path: '/student/career', icon: GraduationCap },
+          // Career page is temporarily hidden per requirements, code preserved in HRCareerPath.tsx
           { label: 'Feedback', path: '/student/feedback', icon: MessageSquare },
           { label: 'Feedback for Trainers', path: '/student/trainer-feedback', icon: MessageSquarePlus },
           { label: 'Profile', path: '/student/profile', icon: UserCheck },
@@ -93,7 +93,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           { label: 'Assessment', path: '/mentor/assessments', icon: ClipboardList },
           { label: 'Assessment Evaluation', path: '/mentor/assessment-evaluation', icon: FileSpreadsheet },
           { label: 'Scoresheet', path: '/mentor/scoresheet', icon: FileSpreadsheet },
-          { label: 'Feedback', path: '/mentor/feedback', icon: MessageSquare },
+          { label: 'Feedback Received', path: '/mentor/feedback', icon: MessageSquare },
         ];
       case 'HR':
         return [
@@ -257,13 +257,13 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                         isCollapsed ? 'justify-center' : 'justify-start'
                       } ${
                         isActive
-                          ? 'bg-white text-[#0275ad] dark:bg-sky-100 dark:text-[#025a85] shadow-md shadow-black/10 font-bold border border-white/80'
+                          ? 'bg-white text-[#0275ad] dark:bg-sky-500/25 dark:text-sky-200 dark:border-sky-400/40 shadow-md shadow-black/10 font-bold border border-white/80'
                           : 'text-sky-100/90 hover:text-white hover:bg-white/15'
                       }`}
                     >
                       <Icon
                         className={`w-5 h-5 shrink-0 transition-colors ${
-                          isActive ? 'text-[#0275ad] dark:text-[#025a85]' : 'text-sky-200 group-hover:text-white'
+                          isActive ? 'text-[#0275ad] dark:text-sky-300' : 'text-sky-200 group-hover:text-white'
                         }`}
                       />
                       {!isCollapsed && <span className="truncate">{item.label}</span>}
@@ -357,11 +357,11 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                       onClick={() => setIsMobileOpen(false)}
                       className={`flex items-center gap-3 px-3.5 py-2.5 sm:py-3 rounded-xl font-semibold text-xs sm:text-sm transition-all ${
                         isActive
-                          ? 'bg-white text-[#0275ad] dark:bg-sky-100 dark:text-[#025a85] font-bold shadow-md shadow-black/10 border border-white/80'
+                          ? 'bg-white text-[#0275ad] dark:bg-sky-500/25 dark:text-sky-200 dark:border-sky-400/40 font-bold shadow-md shadow-black/10 border border-white/80'
                           : 'text-sky-100/90 hover:text-white hover:bg-white/15'
                       }`}
                     >
-                      <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-[#0275ad]' : 'text-sky-200'}`} />
+                      <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-[#0275ad] dark:text-sky-300' : 'text-sky-200'}`} />
                       <span className="truncate">{item.label}</span>
                     </Link>
                   );

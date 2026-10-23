@@ -6,6 +6,7 @@ import { Button } from '../components/Button';
 import { Loading } from '../components/Loading';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { api } from '../api/client';
+import { useAuth } from '../context/AuthContext';
 import { TrainerFeedbackItem, TrainerOption, Batch } from '../types';
 import {
   MessageSquarePlus, Star, Filter, Calendar, User,
@@ -13,6 +14,8 @@ import {
 } from 'lucide-react';
 
 export const HRTrainerFeedback: React.FC = () => {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const [feedbacks, setFeedbacks] = useState<TrainerFeedbackItem[]>([]);
   const [trainers, setTrainers] = useState<TrainerOption[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -256,10 +259,21 @@ export const HRTrainerFeedback: React.FC = () => {
                           </span>
                           <span className="text-slate-300 dark:text-slate-700">•</span>
                           <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
-                            By: {fb.student_name}
+                            By:{' '}
+                            {fb.is_anonymous ? (
+                              isSuperAdmin ? (
+                                <span className="font-bold text-amber-600 dark:text-amber-400">
+                                  {fb.student_name} <span className="text-[10px] font-normal text-slate-500">(Admin View)</span>
+                                </span>
+                              ) : (
+                                <span className="italic text-slate-500 dark:text-slate-400">Anonymous Trainee</span>
+                              )
+                            ) : (
+                              fb.student_name
+                            )}
                           </span>
                           {fb.is_anonymous ? (
-                            <Badge variant="neutral">Anonymous to Trainer</Badge>
+                            <Badge variant="neutral">Anonymous</Badge>
                           ) : (
                             <Badge variant="info">Named</Badge>
                           )}

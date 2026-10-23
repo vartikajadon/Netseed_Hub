@@ -86,3 +86,45 @@ def test_device_registration_and_approval(client):
     appr_resp = client.put(f"/api/v1/devices/{device_id}/approve", json={"approver_id": "usr-hr-001"}, headers=HR_HEADERS)
     assert appr_resp.status_code == 200, appr_resp.text
     assert appr_resp.json()["status"] == "APPROVED"
+
+
+def test_login_and_logout_capture_location(client):
+    # 1. Test Login with location
+    login_payload = {
+        "email": "student1@netlink.org",
+        "password": "default_password",
+        "latitude": 23.259933,
+        "longitude": 77.412615,
+        "accuracy": 12.5
+    }
+    login_resp = client.post("/api/v1/auth/login", json=login_payload)
+    assert login_resp.status_code == 200, login_resp.text
+    login_data = login_resp.json()
+    assert "access_token" in login_data
+    assert login_data["user"]["last_login_latitude"] == 23.259933
+    assert login_data["user"]["last_login_longitude"] == 77.412615
+    token = login_data["access_token"]
+    user_id = login_data["user"]["id"]
+
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 2. Test Logout with location
+    logout_payload = {
+        "latitude": 23.260100,
+        "longitude": 77.413200,
+        "accuracy": 8.0
+    }
+    logout_resp = client.post("/api/v1/auth/logout", json=logout_payload, headers=headers)
+    assert logout_resp.status_code == 200, logout_resp.text
+    logout_data = logout_resp.json()
+    assert logout_data["captured_location"]["latitude"] == 23.260100
+    assert logout_data["captured_location"]["longitude"] == 77.413200
+
+    # 3. Query location logs
+    logs_resp = client.get("/api/v1/auth/location-logs", headers=headers)
+    assert logs_resp.status_code == 200, logs_resp.text
+    logs = logs_resp.json()
+    assert len(logs) >= 2
+    event_types = [l["event_type"] for l in logs]
+    assert "LOGIN" in event_types
+    assert "LOGOUT" in event_types

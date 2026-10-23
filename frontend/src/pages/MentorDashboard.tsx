@@ -13,7 +13,7 @@ import {
   Users, BookOpen, UserCheck, UserX, UserMinus, AlertTriangle, ShieldCheck,
   MessageSquare, PlusCircle, Star, Calendar, ArrowRight,
   User, CheckCircle2, AlertCircle, ChevronRight, Eye, Layers, Search,
-  Clock, MapPin, Phone, Mail, FileText, Info, ShieldAlert
+  Clock, MapPin, Phone, Mail, FileText, Info, ShieldAlert, RefreshCw
 } from 'lucide-react';
 import { formatLocalTime, formatLocalDate, getStandardDateString } from '../lib/dateUtils';
 
@@ -41,11 +41,18 @@ export const MentorDashboard: React.FC = () => {
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [selectedStudentForFeedback, setSelectedStudentForFeedback] = useState<string | undefined>(undefined);
 
+  // Real-time refresh state
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(new Date());
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
   const todayStr = useMemo(() => getStandardDateString(), []);
 
-  const fetchData = async () => {
+  const fetchData = async (silent = false) => {
     try {
-      setIsLoading(true);
+      if (!silent) setIsLoading(true);
+      else setIsRefreshing(true);
+      setError(null);
+
       const [stdRes, batchData, feedbackData, attendanceData] = await Promise.all([
         api.get<PaginatedStudentList | Student[]>('/students?limit=500'),
         api.get<Batch[]>('/batches'),
@@ -58,15 +65,24 @@ export const MentorDashboard: React.FC = () => {
       setBatches(batchData || []);
       setFeedbacks(feedbackData || []);
       setTodayRecords(attendanceData || []);
+      setLastRefreshedAt(new Date());
     } catch (err: any) {
-      setError(err.message || 'Failed to load mentor overview data');
+      if (!silent) setError(err.message || 'Failed to load mentor overview data');
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
+      setIsRefreshing(false);
     }
   };
 
   useEffect(() => {
     fetchData();
+
+    // Real-time polling: Refresh overview & attendance pulse every 10 seconds
+    const interval = setInterval(() => {
+      fetchData(true);
+    }, 10000);
+
+    return () => clearInterval(interval);
   }, [todayStr]);
 
   const handleOpenFeedback = (studentId?: string) => {
@@ -99,19 +115,31 @@ export const MentorDashboard: React.FC = () => {
     );
   }, [students]);
 
-  // 3. Today's Presentees
+  // 3. Today's Presentees (Students who punched in today or have completed required attendance)
   const presentStudents = useMemo(() => {
-    return students.filter((s) => {
+    return activeTrainees.filter((s) => {
       const rec = todayRecordsMap.get(s.id);
-      return rec && (rec.status === 'PRESENT' || rec.status === 'REGULARIZED');
+      if (!rec) return false;
+      return (
+        rec.status === 'PRESENT' ||
+        rec.status === 'REGULARIZED' ||
+        Boolean(rec.first_punch_in) ||
+        (Number(rec.punch_count) > 0)
+      );
     });
-  }, [students, todayRecordsMap]);
+  }, [activeTrainees, todayRecordsMap]);
 
-  // 4. Today's Absentees (Active students not present)
+  // 4. Today's Absentees (Active trainees who have not punched in or marked attendance today)
   const absentStudents = useMemo(() => {
     return activeTrainees.filter((s) => {
       const rec = todayRecordsMap.get(s.id);
-      return !rec || rec.status === 'ABSENT' || rec.status === 'INCOMPLETE';
+      if (!rec) return true;
+      const isPresentOrCheckedIn =
+        rec.status === 'PRESENT' ||
+        rec.status === 'REGULARIZED' ||
+        Boolean(rec.first_punch_in) ||
+        (Number(rec.punch_count) > 0);
+      return !isPresentOrCheckedIn;
     });
   }, [activeTrainees, todayRecordsMap]);
 
@@ -195,7 +223,31 @@ export const MentorDashboard: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                Live Real-Time
+              </span>
+              <span className="text-[10px] text-slate-400 font-mono">
+                {lastRefreshedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </span>
+            </div>
+
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => fetchData(false)}
+              className="text-xs"
+              isLoading={isRefreshing}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+
             <Button
               variant="primary"
               size="sm"
@@ -500,7 +552,21 @@ export const MentorDashboard: React.FC = () => {
                             {rec?.total_working_hours ? `${rec.total_working_hours.toFixed(1)} hrs logged` : 'Active'}
                           </div>
                         </div>
-                        <Badge variant="success">PRESENT</Badge>
+                        <Badge
+                          variant={
+                            rec?.status === 'PRESENT'
+                              ? 'success'
+                              : rec?.status === 'REGULARIZED'
+                              ? 'info'
+                              : 'warning'
+                          }
+                        >
+                          {rec?.status === 'PRESENT'
+                            ? 'PRESENT'
+                            : rec?.status === 'REGULARIZED'
+                            ? 'REGULARIZED'
+                            : 'CHECKED IN'}
+                        </Badge>
                         <Button
                           variant="secondary"
                           size="sm"

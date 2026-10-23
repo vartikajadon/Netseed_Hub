@@ -14,7 +14,7 @@ import {
 import {
   Award, FileSpreadsheet, ExternalLink, Download, CheckCircle2, Clock,
   Search, Filter, Copy, Check, AlertCircle, ArrowLeft, Building2,
-  UserCheck, Layers, FileText, ChevronRight, Sparkles, Printer
+  UserCheck, Layers, FileText, ChevronRight, Sparkles, Printer, Edit3
 } from 'lucide-react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 
@@ -222,18 +222,6 @@ export const MentorAssessmentEvaluation: React.FC = () => {
               Review submitted test answers, download question/answer sheets, grade student submissions,
               and maintain the real-time cumulative <span className="text-amber-300 font-semibold">Result Score Sheet</span> across Entry, Middle, and Exit levels.
             </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Link to="/mentor/assessments">
-              <Button
-                variant="outline"
-                className="bg-white/10 hover:bg-white/20 text-white border-white/20 flex items-center gap-2 text-xs"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span>Assessment Papers</span>
-              </Button>
-            </Link>
           </div>
         </div>
 
@@ -492,17 +480,27 @@ export const MentorAssessmentEvaluation: React.FC = () => {
 
                             {/* Action Button */}
                             <td className="py-3.5 px-4 text-right">
-                              <Button
-                                size="sm"
-                                onClick={() => openEvaluationModal(sub)}
-                                className={
-                                  isEvaluated
-                                    ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300'
-                                    : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-xs'
-                                }
-                              >
-                                {isEvaluated ? 'Edit Grade' : 'Grade Test'}
-                              </Button>
+                              {isEvaluated ? (
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={() => openEvaluationModal(sub)}
+                                  className="gap-1.5 font-semibold text-slate-800 dark:text-slate-100 border border-slate-300 dark:border-slate-600 hover:border-indigo-400 dark:hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors shadow-2xs"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                                  <span>Edit Grade</span>
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="primary"
+                                  onClick={() => openEvaluationModal(sub)}
+                                  className="gap-1.5 font-semibold shadow-xs"
+                                >
+                                  <Award className="w-3.5 h-3.5" />
+                                  <span>Grade Test</span>
+                                </Button>
+                              )}
                             </td>
                           </tr>
                         );

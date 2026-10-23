@@ -98,10 +98,25 @@ def issue_certificate(
 
     if payload.recipient_student_id:
         recipient_student = db.query(Student).filter(Student.id == payload.recipient_student_id).first()
-        if recipient_student:
-            if recipient_student.user:
-                recipient_name = recipient_student.user.full_name
-            recipient_roll_no = recipient_student.roll_number
+        if not recipient_student:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Student ID '{payload.recipient_student_id}' not found."
+            )
+        
+        # Enforce Mentor Certificate Approval Lock
+        if not recipient_student.certificate_approved_by_mentor:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Certificate issuance is locked for {recipient_student.roll_number}. "
+                    "The assigned mentor must first click 'Release Certificate' before HR can generate and issue credentials."
+                )
+            )
+
+        if recipient_student.user:
+            recipient_name = recipient_student.user.full_name
+        recipient_roll_no = recipient_student.roll_number
 
     # Generate Credential ID if not provided
     credential_id = payload.credential_id

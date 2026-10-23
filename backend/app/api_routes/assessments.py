@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.core.permissions import get_current_user, require_role
-from app.models.all_models import User, Student, Batch, Assessment, AssessmentSubmission
+from app.models.all_models import User, Student, Batch, Assessment, AssessmentSubmission, Program, CurriculumTopic
 from app.schemas.assessment_schemas import (
     AssessmentCreate,
     AssessmentUpdate,
@@ -18,6 +18,8 @@ from app.schemas.assessment_schemas import (
     StudentScoresheetUpdate,
     AssessmentMarksDirectUpdate,
     BatchSendToManagementRequest,
+    StudentCurriculumSkillItem,
+    StudentCurriculumSkillsResponse,
 )
 from app.services.notification_service import create_notification
 
@@ -95,6 +97,7 @@ def serialize_assessment(
         paper_content=paper_content,
         paper_file_url=paper_file_url,
         paper_file_name=paper_file_name,
+        skill_unlocked=a.skill_unlocked,
         is_unlocked=bool(a.is_unlocked),
         is_visible_to_student=is_visible_to_student,
         can_attempt=can_attempt,
@@ -184,6 +187,245 @@ def get_assessments(
     return results
 
 
+@router.get("/student-curriculum-skills", response_model=StudentCurriculumSkillsResponse, summary="Get Student Skills Linked to Curriculum & Passed Assessments")
+def get_student_curriculum_skills(
+    student_id: Optional[str] = Query(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Returns skills structured according to the student's curriculum and level of concepts.
+    Skills are dynamically unlocked when the student successfully passes (>= passing_marks)
+    the assessment designated by the mentor for that topic/skill.
+    """
+    student = None
+    if current_user.role == "STUDENT":
+        student = db.query(Student).filter(Student.user_id == current_user.id).first()
+    elif student_id:
+        student = db.query(Student).filter(Student.id == student_id).first()
+    else:
+        student = db.query(Student).first()
+
+    if not student:
+        raise HTTPException(status_code=404, detail="Student profile not found.")
+
+    program = db.query(Program).filter(Program.id == student.program_id).first() if student.program_id else None
+    if not program:
+        program = db.query(Program).first()
+
+    batch = db.query(Batch).filter(Batch.id == student.batch_id).first() if student.batch_id else None
+
+    # Curriculum topics
+    topics = []
+    if program:
+        topics = db.query(CurriculumTopic).filter(
+            CurriculumTopic.program_id == program.id
+        ).order_by(CurriculumTopic.order_index.asc()).all()
+
+    # Assessments in student's batch
+    batch_assessments = []
+    if student.batch_id:
+        batch_assessments = db.query(Assessment).filter(Assessment.batch_id == student.batch_id).all()
+    else:
+        batch_assessments = db.query(Assessment).all()
+
+    # Student's evaluated submissions
+    submissions = db.query(AssessmentSubmission).filter(
+        AssessmentSubmission.student_id == student.id
+    ).all()
+    sub_by_assessment = {sub.assessment_id: sub for sub in submissions}
+
+    def get_level_info(level_str: str):
+        if level_str == "EXIT_LEVEL":
+            return ("EXIT_LEVEL", "Advanced")
+        elif level_str == "MIDDLE_LEVEL":
+            return ("MIDDLE_LEVEL", "Intermediate")
+        return ("ENTRY_LEVEL", "Beginner")
+
+    skills_list: List[StudentCurriculumSkillItem] = []
+    seen_skill_names = set()
+
+    # 1. Process assessments with mentor-assigned `skill_unlocked`
+    for assess in batch_assessments:
+        if not assess.skill_unlocked:
+            continue
+
+        skill_title = assess.skill_unlocked.strip()
+        if not skill_title or skill_title.lower() in seen_skill_names:
+            continue
+        seen_skill_names.add(skill_title.lower())
+
+        sub = sub_by_assessment.get(assess.id)
+        is_passed = False
+        marks_obtained = None
+        score_pct = None
+        unlocked_at = None
+        unlocked_by_name = None
+
+        if sub and sub.status == "EVALUATED" and sub.marks_obtained is not None:
+            marks_obtained = float(sub.marks_obtained)
+            total = assess.total_marks or 100
+            score_pct = round((marks_obtained / total) * 100, 1) if total > 0 else 0
+            passing = assess.passing_marks or 40
+            if marks_obtained >= passing:
+                is_passed = True
+                unlocked_at = sub.evaluated_at or sub.updated_at
+                evaluator = db.query(User).filter(User.id == sub.evaluated_by).first() if sub.evaluated_by else None
+                unlocked_by_name = evaluator.full_name if evaluator else "Mentor"
+
+        lvl, lvl_lbl = get_level_info(assess.level)
+
+        skills_list.append(StudentCurriculumSkillItem(
+            id=f"assess-skill-{assess.id}",
+            skill_name=skill_title,
+            module_name=assess.level.replace("_", " ").title(),
+            level=lvl,
+            level_label=lvl_lbl,
+            is_unlocked=is_passed,
+            status="UNLOCKED" if is_passed else "LOCKED",
+            unlocked_at=unlocked_at,
+            unlocked_by_name=unlocked_by_name,
+            assessment_id=assess.id,
+            assessment_title=assess.title,
+            marks_obtained=marks_obtained,
+            total_marks=assess.total_marks or 100,
+            passing_marks=assess.passing_marks or 40,
+            score_percentage=score_pct,
+            description=assess.description or f"Unlocked by achieving ≥{assess.passing_marks or 40}% in {assess.title}."
+        ))
+
+    # 2. Process curriculum topics according to curriculum concept levels
+    num_topics = len(topics)
+    for idx, topic in enumerate(topics):
+        topic_title = topic.title.strip()
+        if idx < num_topics * 0.35:
+            lvl, lvl_lbl = ("ENTRY_LEVEL", "Beginner")
+        elif idx < num_topics * 0.70:
+            lvl, lvl_lbl = ("MIDDLE_LEVEL", "Intermediate")
+        else:
+            lvl, lvl_lbl = ("EXIT_LEVEL", "Advanced")
+
+        skill_display_name = f"{topic_title} ({lvl_lbl})"
+        if skill_display_name.lower() in seen_skill_names or topic_title.lower() in seen_skill_names:
+            continue
+        seen_skill_names.add(skill_display_name.lower())
+
+        matching_assess = None
+        for a in batch_assessments:
+            if (a.skill_unlocked and a.skill_unlocked.lower() == skill_display_name.lower()) or \
+               (topic_title.lower() in a.title.lower()) or \
+               (a.level == lvl):
+                matching_assess = a
+                break
+
+        is_passed = False
+        marks_obtained = None
+        score_pct = None
+        unlocked_at = None
+        unlocked_by_name = None
+
+        if matching_assess:
+            sub = sub_by_assessment.get(matching_assess.id)
+            if sub and sub.status == "EVALUATED" and sub.marks_obtained is not None:
+                marks_obtained = float(sub.marks_obtained)
+                total = matching_assess.total_marks or 100
+                score_pct = round((marks_obtained / total) * 100, 1) if total > 0 else 0
+                if marks_obtained >= (matching_assess.passing_marks or 40):
+                    is_passed = True
+                    unlocked_at = sub.evaluated_at or sub.updated_at
+                    evaluator = db.query(User).filter(User.id == sub.evaluated_by).first() if sub.evaluated_by else None
+                    unlocked_by_name = evaluator.full_name if evaluator else "Mentor"
+
+        skills_list.append(StudentCurriculumSkillItem(
+            id=f"topic-skill-{topic.id}",
+            skill_name=f"{topic_title} ({lvl_lbl})",
+            module_name=topic.module_name,
+            level=lvl,
+            level_label=lvl_lbl,
+            is_unlocked=is_passed,
+            status="UNLOCKED" if is_passed else "LOCKED",
+            unlocked_at=unlocked_at,
+            unlocked_by_name=unlocked_by_name,
+            assessment_id=matching_assess.id if matching_assess else None,
+            assessment_title=matching_assess.title if matching_assess else f"{lvl_lbl} Assessment",
+            marks_obtained=marks_obtained,
+            total_marks=matching_assess.total_marks if matching_assess else 100,
+            passing_marks=matching_assess.passing_marks if matching_assess else 40,
+            score_percentage=score_pct,
+            description=topic.description or f"Mastery of {topic_title} in {topic.module_name}."
+        ))
+
+    # 3. Default fallback curriculum skills if curriculum has not been imported yet
+    if not skills_list:
+        default_skills = [
+            ("Python Basics & Syntax (Beginner)", "Module 1: Programming Foundations", "ENTRY_LEVEL", "Beginner", "Python variables, control flow, loops, functions, and fundamental syntax."),
+            ("Python Data Structures (Beginner)", "Module 2: Core Data Structures", "ENTRY_LEVEL", "Beginner", "Lists, dictionaries, tuples, sets, and basic algorithmic complexity."),
+            ("Python OOP & Class Architecture (Intermediate)", "Module 3: Object-Oriented Engineering", "MIDDLE_LEVEL", "Intermediate", "Classes, inheritance, polymorphism, encapsulation, and clean design patterns."),
+            ("FastAPI Microservices & Web APIs (Intermediate)", "Module 4: Backend Engineering", "MIDDLE_LEVEL", "Intermediate", "Building REST APIs, routing, Pydantic data validation, and dependency injection."),
+            ("SQLAlchemy ORM & Database Persistence (Intermediate)", "Module 5: Persistence & Databases", "MIDDLE_LEVEL", "Intermediate", "Database schema modeling, SQL queries, transactions, and migration techniques."),
+            ("Production Deployment & CI/CD Pipelines (Advanced)", "Module 6: Cloud & DevOps", "EXIT_LEVEL", "Advanced", "Docker containerization, automated testing suites, and production release pipelines."),
+        ]
+        for idx, (s_title, mod, lvl, lvl_lbl, desc) in enumerate(default_skills):
+            matched_a = next((a for a in batch_assessments if a.level == lvl), None)
+            is_p = False
+            m_obt = None
+            sc_pct = None
+            u_at = None
+            u_by = None
+            if matched_a:
+                sub = sub_by_assessment.get(matched_a.id)
+                if sub and sub.status == "EVALUATED" and sub.marks_obtained is not None:
+                    m_obt = float(sub.marks_obtained)
+                    tot = matched_a.total_marks or 100
+                    sc_pct = round((m_obt / tot) * 100, 1)
+                    if m_obt >= (matched_a.passing_marks or 40):
+                        is_p = True
+                        u_at = sub.evaluated_at
+                        ev = db.query(User).filter(User.id == sub.evaluated_by).first() if sub.evaluated_by else None
+                        u_by = ev.full_name if ev else "Mentor"
+
+            skills_list.append(StudentCurriculumSkillItem(
+                id=f"default-skill-{idx+1}",
+                skill_name=s_title,
+                module_name=mod,
+                level=lvl,
+                level_label=lvl_lbl,
+                is_unlocked=is_p,
+                status="UNLOCKED" if is_p else "LOCKED",
+                unlocked_at=u_at,
+                unlocked_by_name=u_by,
+                assessment_id=matched_a.id if matched_a else None,
+                assessment_title=matched_a.title if matched_a else f"{lvl_lbl} Assessment",
+                marks_obtained=m_obt,
+                total_marks=matched_a.total_marks if matched_a else 100,
+                passing_marks=matched_a.passing_marks if matched_a else 40,
+                score_percentage=sc_pct,
+                description=desc
+            ))
+
+    total = len(skills_list)
+    unlocked = sum(1 for s in skills_list if s.is_unlocked)
+    locked = total - unlocked
+    pct = round((unlocked / total) * 100, 1) if total > 0 else 0.0
+
+    prog_title = "Enrolled Curriculum"
+    if program:
+        prog_title = getattr(program, 'title', None) or getattr(program, 'name', None) or "Enrolled Curriculum"
+
+    return StudentCurriculumSkillsResponse(
+        program_id=program.id if program else None,
+        program_title=prog_title,
+        batch_name=batch.name if batch else None,
+        student_name=student.user.full_name if student.user else student.roll_number,
+        student_roll_no=student.roll_number,
+        total_skills=total,
+        unlocked_skills=unlocked,
+        locked_skills=locked,
+        completion_percentage=pct,
+        skills=skills_list
+    )
+
+
 @router.post("", response_model=AssessmentResponse, status_code=status.HTTP_201_CREATED, summary="Create Assessment")
 def create_assessment(
     payload: AssessmentCreate,
@@ -208,6 +450,7 @@ def create_assessment(
         paper_content=payload.paper_content,
         paper_file_url=payload.paper_file_url,
         paper_file_name=payload.paper_file_name,
+        skill_unlocked=payload.skill_unlocked,
         is_unlocked=False,
     )
     db.add(new_assessment)
@@ -288,6 +531,8 @@ def update_assessment(
         assessment.paper_file_url = payload.paper_file_url
     if payload.paper_file_name is not None:
         assessment.paper_file_name = payload.paper_file_name
+    if payload.skill_unlocked is not None:
+        assessment.skill_unlocked = payload.skill_unlocked
     if payload.is_unlocked is not None:
         assessment.is_unlocked = payload.is_unlocked
 

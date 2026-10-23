@@ -9,10 +9,14 @@ import { Loading } from '../components/Loading';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { Modal } from '../components/Modal';
 import { api } from '../api/client';
-import { Student, PaginatedStudentList, formatBatchType } from '../types';
+import {
+  Student, PaginatedStudentList, formatBatchType,
+  ScoreSheetRow, MentorFeedbackItem
+} from '../types';
 import {
   BarChart3, FileText, Download, Eye, RefreshCw, Search,
-  CheckCircle2, Clock, Award, ShieldCheck, UserCheck
+  CheckCircle2, Clock, Award, ShieldCheck, UserCheck,
+  Star, ExternalLink, Globe, MessageSquare, FileSpreadsheet, AlertCircle
 } from 'lucide-react';
 
 interface StudentReportSummary {
@@ -23,10 +27,15 @@ interface StudentReportSummary {
   feesStatus: string;
   performanceGrade: string;
   generatedAt: string;
+  scoresheet?: ScoreSheetRow | null;
+  mentorFeedbacks?: MentorFeedbackItem[];
+  finalProjectUrl?: string | null;
 }
 
 export const HRReports: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
+  const [scoresheetsMap, setScoresheetsMap] = useState<Record<string, ScoreSheetRow>>({});
+  const [feedbacksMap, setFeedbacksMap] = useState<Record<string, MentorFeedbackItem[]>>({});
   const [search, setSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,8 +49,41 @@ export const HRReports: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await api.get<PaginatedStudentList>('/students?limit=200');
-      setStudents(res.items || []);
+      const [studentsRes, scoresheetsRes, feedbacksRes] = await Promise.all([
+        api.get<PaginatedStudentList>('/students?limit=200'),
+        api.get<ScoreSheetRow[]>('/assessments/score-sheet/matrix').catch(() => []),
+        api.get<MentorFeedbackItem[]>('/feedbacks').catch(() => []),
+      ]);
+
+      const studentList = studentsRes.items || [];
+      setStudents(studentList);
+
+      const sMap: Record<string, ScoreSheetRow> = {};
+      if (Array.isArray(scoresheetsRes)) {
+        scoresheetsRes.forEach((row) => {
+          if (row.student_id) {
+            sMap[row.student_id] = row;
+          }
+        });
+      }
+      setScoresheetsMap(sMap);
+
+      const fMap: Record<string, MentorFeedbackItem[]> = {};
+      if (Array.isArray(feedbacksRes)) {
+        feedbacksRes.forEach((fb) => {
+          if (fb.student_id) {
+            if (!fMap[fb.student_id]) {
+              fMap[fb.student_id] = [];
+            }
+            fMap[fb.student_id].push(fb);
+          }
+        });
+        // Sort newest first
+        Object.keys(fMap).forEach((sid) => {
+          fMap[sid].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        });
+      }
+      setFeedbacksMap(fMap);
     } catch (err: any) {
       setError(err.message || 'Failed to fetch student roster for report generation.');
     } finally {
@@ -53,13 +95,26 @@ export const HRReports: React.FC = () => {
     fetchStudents();
   }, []);
 
-  const generateReportForStudent = (student: Student): StudentReportSummary => {
+  const generateReportForStudent = (
+    student: Student,
+    sMap = scoresheetsMap,
+    fMap = feedbacksMap
+  ): StudentReportSummary => {
     setGeneratingId(student.id);
 
-    // Mock calculated performance metrics for demonstration
+    const scoresheet = sMap[student.id] || null;
+    const studentFeedbacks = fMap[student.id] || [];
+    const finalProjectUrl = scoresheet?.project_url || student.project_url || null;
+
     const attendancePct = student.enrollment_status === 'ACTIVE' ? 94.5 : 82.0;
     const workingHrs = student.enrollment_status === 'ACTIVE' ? 142.5 : 98.0;
-    const grade = attendancePct >= 90 ? 'A+ (Excellent)' : attendancePct >= 80 ? 'B+ (Good)' : 'C (Needs Improvement)';
+
+    let grade = attendancePct >= 90 ? 'A+ (Excellent)' : attendancePct >= 80 ? 'B+ (Good)' : 'C (Needs Improvement)';
+    if (scoresheet && scoresheet.final_status === 'PASSED') {
+      grade = `Passed (${scoresheet.percentage}%)`;
+    } else if (scoresheet && scoresheet.final_status === 'FAILED') {
+      grade = `Failed Assessment (${scoresheet.percentage}%)`;
+    }
 
     const report: StudentReportSummary = {
       student,
@@ -69,6 +124,9 @@ export const HRReports: React.FC = () => {
       feesStatus: student.installment_type === 'TWO_INSTALLMENTS' ? '2 Installments (Active)' : 'Full Payment Verified',
       performanceGrade: grade,
       generatedAt: new Date().toLocaleString(),
+      scoresheet,
+      mentorFeedbacks: studentFeedbacks,
+      finalProjectUrl,
     };
 
     setGeneratedReports((prev) => ({ ...prev, [student.id]: report }));
@@ -78,6 +136,8 @@ export const HRReports: React.FC = () => {
 
   const handleDownloadSingleReport = (student: Student) => {
     const report = generatedReports[student.id] || generateReportForStudent(student);
+    const ss = report.scoresheet;
+    const latestFeedback = (report.mentorFeedbacks && report.mentorFeedbacks.length > 0) ? report.mentorFeedbacks[0] : null;
 
     const csvContent = [
       ['FIELD', 'VALUE'],
@@ -92,10 +152,23 @@ export const HRReports: React.FC = () => {
       ['Total Logged Hours', `${report.totalWorkingHours} Hours`],
       ['Face Biometric Status', report.faceEnrollmentStatus],
       ['Fees Structure', report.feesStatus],
-      ['Performance Grade', report.performanceGrade],
+      ['Performance Grade / Result', report.performanceGrade],
+      ['Scoresheet Overall Status', ss ? ss.final_status : 'N/A'],
+      ['Scoresheet Total Marks', ss ? `${ss.total_obtained} / ${ss.total_max}` : 'N/A'],
+      ['Scoresheet Percentage', ss ? `${ss.percentage}%` : 'N/A'],
+      ['Entry Level Score', ss?.entry_level ? `${ss.entry_level.marks_obtained ?? 'N/A'} / ${ss.entry_level.total_marks}` : 'N/A'],
+      ['Entry Level Feedback', ss?.entry_level?.feedback || 'N/A'],
+      ['Middle Level Score', ss?.middle_level ? `${ss.middle_level.marks_obtained ?? 'N/A'} / ${ss.middle_level.total_marks}` : 'N/A'],
+      ['Middle Level Feedback', ss?.middle_level?.feedback || 'N/A'],
+      ['Exit Level Score', ss?.exit_level ? `${ss.exit_level.marks_obtained ?? 'N/A'} / ${ss.exit_level.total_marks}` : 'N/A'],
+      ['Exit Level Feedback', ss?.exit_level?.feedback || 'N/A'],
+      ['Mentor Name', latestFeedback?.mentor_name || 'N/A'],
+      ['Mentor Average Rating', latestFeedback ? `${latestFeedback.average_rating} / 5` : 'N/A'],
+      ['Mentor Qualitative Feedback', latestFeedback?.comment || 'N/A'],
+      ['Final Project Submission Link', report.finalProjectUrl || 'N/A'],
       ['Report Generated At', report.generatedAt],
     ]
-      .map((row) => row.map((val) => `"${val}"`).join(','))
+      .map((row) => row.map((val) => `"${String(val || '').replace(/"/g, '""')}"`).join(','))
       .join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -113,11 +186,16 @@ export const HRReports: React.FC = () => {
 
     const headers = [
       'Roll Number', 'Full Name', 'Email', 'Phone', 'Program', 'Batch Type',
-      'Status', 'Attendance Rate', 'Total Hours', 'Biometrics', 'Report Date'
+      'Status', 'Scoresheet Status', 'Scoresheet Total', 'Scoresheet %',
+      'Mentor Rating', 'Mentor Feedback', 'Final Project Link',
+      'Attendance Rate', 'Total Hours', 'Biometrics', 'Report Date'
     ];
 
     const rows = students.map((s) => {
       const rep = generatedReports[s.id] || generateReportForStudent(s);
+      const ss = rep.scoresheet;
+      const latestFb = (rep.mentorFeedbacks && rep.mentorFeedbacks.length > 0) ? rep.mentorFeedbacks[0] : null;
+
       return [
         s.roll_number,
         s.user?.full_name || 'N/A',
@@ -126,6 +204,12 @@ export const HRReports: React.FC = () => {
         s.program?.title || 'Unassigned',
         formatBatchType(s.batch_type),
         s.enrollment_status,
+        ss ? ss.final_status : 'N/A',
+        ss ? `${ss.total_obtained}/${ss.total_max}` : 'N/A',
+        ss ? `${ss.percentage}%` : 'N/A',
+        latestFb ? `${latestFb.average_rating} / 5` : 'N/A',
+        latestFb ? latestFb.comment.replace(/\n/g, ' ') : 'N/A',
+        rep.finalProjectUrl || 'N/A',
         `${rep.attendancePercentage}%`,
         `${rep.totalWorkingHours} hrs`,
         rep.faceEnrollmentStatus,
@@ -134,7 +218,7 @@ export const HRReports: React.FC = () => {
     });
 
     const csvContent = [headers, ...rows]
-      .map((row) => row.map((val) => `"${val}"`).join(','))
+      .map((row) => row.map((val) => `"${String(val || '').replace(/"/g, '""')}"`).join(','))
       .join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -168,19 +252,11 @@ export const HRReports: React.FC = () => {
       ),
     },
     {
-      header: 'Student Name & Email',
+      header: 'Student Name & Program',
       accessor: (s) => (
         <div>
           <div className="font-bold text-slate-900 dark:text-slate-100">{s.user?.full_name || 'N/A'}</div>
-          <div className="text-xs text-slate-500 dark:text-slate-400">{s.user?.email || 'N/A'}</div>
-        </div>
-      ),
-    },
-    {
-      header: 'Program & Batch Type',
-      accessor: (s) => (
-        <div>
-          <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">{s.program?.title || 'Unassigned'}</div>
+          <div className="text-xs text-slate-500 dark:text-slate-400">{s.program?.title || 'Unassigned'}</div>
           <Badge
             variant={
               (s.batch_type || '').toUpperCase() === 'TECH_MASTER'
@@ -189,7 +265,7 @@ export const HRReports: React.FC = () => {
                 ? 'neutral'
                 : 'success'
             }
-            className="mt-0.5"
+            className="mt-1"
           >
             {formatBatchType(s.batch_type)}
           </Badge>
@@ -197,12 +273,84 @@ export const HRReports: React.FC = () => {
       ),
     },
     {
-      header: 'Status',
-      accessor: (s) => (
-        <Badge variant={s.enrollment_status === 'ACTIVE' ? 'success' : 'info'}>
-          {s.enrollment_status}
-        </Badge>
-      ),
+      header: 'Scoresheet Marks',
+      accessor: (s) => {
+        const ss = scoresheetsMap[s.id];
+        if (!ss) {
+          return <span className="text-xs text-slate-400 italic">No Scoresheet</span>;
+        }
+        const badgeVariant =
+          ss.final_status === 'PASSED'
+            ? 'success'
+            : ss.final_status === 'FAILED'
+            ? 'error'
+            : ss.final_status === 'IN_PROGRESS'
+            ? 'warning'
+            : 'neutral';
+
+        return (
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5">
+              <span className="font-bold text-slate-900 dark:text-slate-100 text-xs">
+                {ss.total_obtained} / {ss.total_max}
+              </span>
+              <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+                ({ss.percentage}%)
+              </span>
+            </div>
+            <Badge variant={badgeVariant} className="text-[10px] px-2 py-0.5">
+              {ss.final_status}
+            </Badge>
+          </div>
+        );
+      },
+    },
+    {
+      header: 'Mentor Feedback',
+      accessor: (s) => {
+        const fbs = feedbacksMap[s.id] || [];
+        if (fbs.length === 0) {
+          return <span className="text-xs text-slate-400 italic">No Feedback</span>;
+        }
+        const latest = fbs[0];
+        return (
+          <div className="max-w-[200px] space-y-1">
+            <div className="flex items-center gap-1 text-amber-500">
+              <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+              <span className="font-bold text-xs text-slate-800 dark:text-slate-200">
+                {latest.average_rating} / 5
+              </span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                by {latest.mentor_name || 'Mentor'}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-600 dark:text-slate-400 line-clamp-1 italic">
+              "{latest.comment}"
+            </p>
+          </div>
+        );
+      },
+    },
+    {
+      header: 'Final Project',
+      accessor: (s) => {
+        const projectUrl = scoresheetsMap[s.id]?.project_url || s.project_url;
+        if (!projectUrl) {
+          return <span className="text-xs text-slate-400 italic">Not Submitted</span>;
+        }
+        return (
+          <a
+            href={projectUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 hover:underline"
+          >
+            <Globe className="w-3.5 h-3.5" />
+            <span className="truncate max-w-[120px]">Project Link</span>
+            <ExternalLink className="w-3 h-3 flex-shrink-0" />
+          </a>
+        );
+      },
     },
     {
       header: 'Report Actions',
@@ -210,7 +358,6 @@ export const HRReports: React.FC = () => {
         const isGenerated = !!generatedReports[s.id];
         return (
           <div className="flex items-center gap-2">
-            {/* Generate Report Button */}
             <Button
               size="sm"
               variant={isGenerated ? 'secondary' : 'primary'}
@@ -222,10 +369,9 @@ export const HRReports: React.FC = () => {
               ) : (
                 <FileText className="w-3.5 h-3.5 mr-1" />
               )}
-              {isGenerated ? 'Re-Generate' : 'Generate Report'}
+              {isGenerated ? 'Re-Generate' : 'Generate'}
             </Button>
 
-            {/* View Report Button */}
             <Button
               size="sm"
               variant="outline"
@@ -235,10 +381,9 @@ export const HRReports: React.FC = () => {
               }}
             >
               <Eye className="w-3.5 h-3.5 mr-1 text-indigo-600 dark:text-indigo-400" />
-              View Report
+              View
             </Button>
 
-            {/* Download Report Button */}
             <Button
               size="sm"
               variant="ghost"
@@ -246,7 +391,7 @@ export const HRReports: React.FC = () => {
               title="Download CSV Report"
               className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
             >
-              <Download className="w-3.5 h-3.5 mr-1" /> Download
+              <Download className="w-3.5 h-3.5" />
             </Button>
           </div>
         );
@@ -265,7 +410,7 @@ export const HRReports: React.FC = () => {
               Student Performance & Lifecycle Reports
             </h1>
             <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 font-medium">
-              Generate, view detailed analytics, and download individual or global CSV reports for all registered trainees.
+              Complete reports including scoresheets (Entry, Middle, Exit), mentor feedback evaluations, and final project submissions.
             </p>
           </div>
 
@@ -307,18 +452,23 @@ export const HRReports: React.FC = () => {
           onClose={() => setViewingReport(null)}
           title={`Detailed Trainee Lifecycle Report: ${viewingReport.student.user?.full_name || viewingReport.student.roll_number}`}
         >
-          <div className="space-y-4 font-sans text-xs max-h-[80vh] overflow-y-auto pr-1">
+          <div className="space-y-5 font-sans text-xs max-h-[80vh] overflow-y-auto pr-1">
+            {/* Header info card */}
             <div className="p-4 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-500/30 rounded-2xl flex items-center justify-between">
               <div>
                 <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-600 dark:text-indigo-400">Student Roll Number</span>
                 <div className="text-lg font-mono font-extrabold text-slate-900 dark:text-slate-100">{viewingReport.student.roll_number}</div>
                 <div className="text-xs text-slate-600 dark:text-slate-400 font-medium">{viewingReport.student.user?.email}</div>
+                <div className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                  Program: <span className="font-semibold text-slate-800 dark:text-slate-200">{viewingReport.student.program?.title || 'Unassigned'}</span> ({formatBatchType(viewingReport.student.batch_type)})
+                </div>
               </div>
               <Badge variant="success" className="px-3 py-1 text-xs">
                 {viewingReport.performanceGrade}
               </Badge>
             </div>
 
+            {/* Attendance & Biometrics */}
             <div className="grid grid-cols-2 gap-3">
               <div className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-1">
                 <span className="text-slate-500 dark:text-slate-400 font-medium block">Attendance Rate</span>
@@ -330,25 +480,217 @@ export const HRReports: React.FC = () => {
               </div>
             </div>
 
-            <div className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2">
+            {/* Section 1: Scoresheet Scores */}
+            <div className="p-4 bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-slate-600 dark:text-slate-400 font-medium">Program Assignment:</span>
-                <span className="font-semibold text-slate-900 dark:text-slate-100">{viewingReport.student.program?.title || 'Unassigned'}</span>
+                <div className="flex items-center gap-2">
+                  <FileSpreadsheet className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                  <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm">
+                    Scoresheet Breakdown
+                  </h3>
+                </div>
+                {viewingReport.scoresheet && (
+                  <Badge
+                    variant={
+                      viewingReport.scoresheet.final_status === 'PASSED'
+                        ? 'success'
+                        : viewingReport.scoresheet.final_status === 'FAILED'
+                        ? 'error'
+                        : viewingReport.scoresheet.final_status === 'IN_PROGRESS'
+                        ? 'warning'
+                        : 'neutral'
+                    }
+                  >
+                    {viewingReport.scoresheet.final_status} ({viewingReport.scoresheet.percentage}%)
+                  </Badge>
+                )}
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-slate-600 dark:text-slate-400 font-medium">Batch Type:</span>
-                <span className="font-semibold text-indigo-600 dark:text-indigo-400">
-                  {formatBatchType(viewingReport.student.batch_type)}
-                </span>
+
+              {viewingReport.scoresheet ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between bg-white dark:bg-slate-800 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">Total Score:</span>
+                    <span className="font-bold text-indigo-600 dark:text-indigo-400 text-sm">
+                      {viewingReport.scoresheet.total_obtained} / {viewingReport.scoresheet.total_max} marks ({viewingReport.scoresheet.percentage}%)
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                    {/* Entry Level */}
+                    <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-800 dark:text-slate-200 text-xs">Entry Level</span>
+                        <span className="text-[10px] text-slate-400">
+                          {viewingReport.scoresheet.entry_level?.is_passed ? (
+                            <span className="text-emerald-500 font-bold">Passed</span>
+                          ) : (
+                            <span>{viewingReport.scoresheet.entry_level?.status || 'Pending'}</span>
+                          )}
+                        </span>
+                      </div>
+                      <div className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                        {viewingReport.scoresheet.entry_level?.marks_obtained !== null && viewingReport.scoresheet.entry_level?.marks_obtained !== undefined
+                          ? `${viewingReport.scoresheet.entry_level.marks_obtained} / ${viewingReport.scoresheet.entry_level.total_marks}`
+                          : 'Not Evaluated'}
+                      </div>
+                      {viewingReport.scoresheet.entry_level?.feedback && (
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 italic mt-1 border-t border-slate-100 dark:border-slate-700 pt-1">
+                          "{viewingReport.scoresheet.entry_level.feedback}"
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Middle Level */}
+                    <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-800 dark:text-slate-200 text-xs">Middle Level</span>
+                        <span className="text-[10px] text-slate-400">
+                          {viewingReport.scoresheet.middle_level?.is_passed ? (
+                            <span className="text-emerald-500 font-bold">Passed</span>
+                          ) : (
+                            <span>{viewingReport.scoresheet.middle_level?.status || 'Pending'}</span>
+                          )}
+                        </span>
+                      </div>
+                      <div className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                        {viewingReport.scoresheet.middle_level?.marks_obtained !== null && viewingReport.scoresheet.middle_level?.marks_obtained !== undefined
+                          ? `${viewingReport.scoresheet.middle_level.marks_obtained} / ${viewingReport.scoresheet.middle_level.total_marks}`
+                          : 'Not Evaluated'}
+                      </div>
+                      {viewingReport.scoresheet.middle_level?.feedback && (
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 italic mt-1 border-t border-slate-100 dark:border-slate-700 pt-1">
+                          "{viewingReport.scoresheet.middle_level.feedback}"
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Exit Level */}
+                    <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-800 dark:text-slate-200 text-xs">Exit Level</span>
+                        <span className="text-[10px] text-slate-400">
+                          {viewingReport.scoresheet.exit_level?.is_passed ? (
+                            <span className="text-emerald-500 font-bold">Passed</span>
+                          ) : (
+                            <span>{viewingReport.scoresheet.exit_level?.status || 'Pending'}</span>
+                          )}
+                        </span>
+                      </div>
+                      <div className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                        {viewingReport.scoresheet.exit_level?.marks_obtained !== null && viewingReport.scoresheet.exit_level?.marks_obtained !== undefined
+                          ? `${viewingReport.scoresheet.exit_level.marks_obtained} / ${viewingReport.scoresheet.exit_level.total_marks}`
+                          : 'Not Evaluated'}
+                      </div>
+                      {viewingReport.scoresheet.exit_level?.feedback && (
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 italic mt-1 border-t border-slate-100 dark:border-slate-700 pt-1">
+                          "{viewingReport.scoresheet.exit_level.feedback}"
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-center text-slate-400 italic">
+                  No scoresheet record found for this student.
+                </div>
+              )}
+            </div>
+
+            {/* Section 2: Final Project Link */}
+            <div className="p-4 bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-2">
+              <div className="flex items-center gap-2">
+                <Globe className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm">
+                  Final Project Submission
+                </h3>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-slate-600 dark:text-slate-400 font-medium">Biometric Face Baseline:</span>
-                <span className="font-semibold text-emerald-600 dark:text-emerald-400">{viewingReport.faceEnrollmentStatus}</span>
+
+              {viewingReport.finalProjectUrl ? (
+                <div className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <div className="space-y-0.5 truncate mr-3">
+                    <span className="text-[10px] uppercase font-bold text-slate-400">Project Repository / Live URL</span>
+                    <div className="text-xs font-mono text-indigo-600 dark:text-indigo-400 truncate">
+                      {viewingReport.finalProjectUrl}
+                    </div>
+                  </div>
+                  <a
+                    href={viewingReport.finalProjectUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-300 rounded-lg text-xs font-bold transition-colors flex-shrink-0"
+                  >
+                    Open Link <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              ) : (
+                <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-400 italic text-center">
+                  No final project link has been submitted by or assigned to this student.
+                </div>
+              )}
+            </div>
+
+            {/* Section 3: Mentor Feedback */}
+            <div className="p-4 bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-3">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 text-amber-500" />
+                <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm">
+                  Mentor Evaluations & Qualitative Feedback
+                </h3>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-slate-600 dark:text-slate-400 font-medium">Financial Fees Plan:</span>
-                <span className="font-semibold text-slate-900 dark:text-slate-100">{viewingReport.feesStatus}</span>
-              </div>
+
+              {viewingReport.mentorFeedbacks && viewingReport.mentorFeedbacks.length > 0 ? (
+                <div className="space-y-3">
+                  {viewingReport.mentorFeedbacks.map((fb, idx) => (
+                    <div key={fb.id || idx} className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-800 dark:text-slate-200 text-xs">
+                            {fb.mentor_name || 'Assigned Mentor'}
+                          </span>
+                          <span className="text-[10px] text-slate-400">
+                            {new Date(fb.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 text-amber-500 font-bold text-xs bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-lg border border-amber-200 dark:border-amber-800/40">
+                          <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                          <span>{fb.average_rating} / 5.0</span>
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-slate-700 dark:text-slate-300 italic bg-slate-50 dark:bg-slate-900/50 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800">
+                        "{fb.comment}"
+                      </p>
+
+                      <div className="grid grid-cols-5 gap-1.5 pt-1 text-[10px] text-slate-500 dark:text-slate-400 text-center">
+                        <div className="p-1 bg-slate-50 dark:bg-slate-900/50 rounded">
+                          <span className="block font-semibold">Tech</span>
+                          <span>{fb.technical_skills}★</span>
+                        </div>
+                        <div className="p-1 bg-slate-50 dark:bg-slate-900/50 rounded">
+                          <span className="block font-semibold">Task</span>
+                          <span>{fb.task_performance}★</span>
+                        </div>
+                        <div className="p-1 bg-slate-50 dark:bg-slate-900/50 rounded">
+                          <span className="block font-semibold">Comm</span>
+                          <span>{fb.communication}★</span>
+                        </div>
+                        <div className="p-1 bg-slate-50 dark:bg-slate-900/50 rounded">
+                          <span className="block font-semibold">Punct</span>
+                          <span>{fb.punctuality_professionalism}★</span>
+                        </div>
+                        <div className="p-1 bg-slate-50 dark:bg-slate-900/50 rounded">
+                          <span className="block font-semibold">Attitude</span>
+                          <span>{fb.learning_attitude}★</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-center text-slate-400 italic">
+                  No mentor feedback recorded for this student yet.
+                </div>
+              )}
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">

@@ -22,6 +22,17 @@
   html.dark body {
     @apply bg-slate-950 text-slate-100;
   }
+
+  html.dark input,
+  html.dark select,
+  html.dark textarea {
+    color-scheme: dark;
+  }
+
+  html.dark input::placeholder,
+  html.dark textarea::placeholder {
+    color: #64748b;
+  }
 }
 
 /* Glassmorphism utilities */

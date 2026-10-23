@@ -5,7 +5,8 @@ import { Card } from '../components/Card';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { ErrorMessage } from '../components/ErrorMessage';
-import { Shield, KeyRound, CheckCircle2 } from 'lucide-react';
+import { Shield, KeyRound, CheckCircle2, MapPin } from 'lucide-react';
+import { captureCurrentLocation } from '../utils/geolocation';
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -20,6 +21,8 @@ export const Login: React.FC = () => {
     if (searchParams.get('logout') === 'success') {
       setSuccessMsg('You have been logged out successfully.');
     }
+    // Pre-request geolocation to ensure permission is prompt and seamless at login
+    captureCurrentLocation(3000).catch(() => {});
   }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -87,8 +90,13 @@ export const Login: React.FC = () => {
 
             <Button type="submit" variant="primary" className="w-full py-2.5 font-bold" isLoading={isLoading}>
               <KeyRound className="w-4 h-4 mr-2" />
-              Sign In
+              {isLoading ? 'Verifying Location & Signing In...' : 'Sign In'}
             </Button>
+
+            <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 pt-1 font-medium">
+              <MapPin className="w-3.5 h-3.5 text-sky-500 dark:text-sky-400 shrink-0" />
+              <span>GPS Geolocation audit active at login & logout</span>
+            </div>
           </form>
 
           <div className="mt-6 pt-5 border-t border-slate-200 dark:border-slate-800">
@@ -104,11 +112,12 @@ export const Login: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={() => handleQuickLogin('mentor@netlink.org')}
+                onClick={() => handleQuickLogin('varsha@netlink.org')}
                 className="p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-800 dark:border-slate-700/80 text-left transition-all shadow-xs"
               >
                 <div className="font-bold text-slate-900 dark:text-slate-100">Mentor</div>
-                <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">mentor@netlink.org</div>
+                <div className="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium">Varsha Yaduvanshi</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">varsha@netlink.org</div>
               </button>
               <button
                 type="button"

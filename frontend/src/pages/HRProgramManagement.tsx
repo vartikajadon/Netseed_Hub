@@ -17,7 +17,6 @@ export const HRProgramManagement: React.FC = () => {
   const [programs, setPrograms] = useState<Program[]>([]);
   const [mentors, setMentors] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedType, setSelectedType] = useState('ALL');
   const [isProgramModalOpen, setIsProgramModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -79,8 +78,12 @@ export const HRProgramManagement: React.FC = () => {
         api.get<ProgramCurriculum>(`/curriculum/programs/${program.id}`),
         api.get<Batch[]>('/batches').catch(() => []),
       ]);
+      const relevantBatches = batchesRes.filter((b) => !b.program_id || b.program_id === program.id);
+      setProgramBatches(relevantBatches);
+      if (relevantBatches.length > 0) {
+        setSelectedBatchId(relevantBatches[0].id);
+      }
       setCurriculumData(curr);
-      setProgramBatches(batchesRes.filter((b) => !b.program_id || b.program_id === program.id));
     } catch (err: any) {
       console.error('Failed to load program curriculum:', err);
     } finally {
@@ -109,17 +112,7 @@ export const HRProgramManagement: React.FC = () => {
       p.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (p.program_type && p.program_type.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    const matchesType =
-      selectedType === 'ALL' ||
-      (p.program_type && p.program_type.toUpperCase() === selectedType.toUpperCase()) ||
-      (selectedType === 'Short Duration' &&
-        p.program_type &&
-        (p.program_type.toUpperCase() === '6 MONTHS' ||
-          p.program_type.toUpperCase() === 'SIX_MONTHS' ||
-          p.program_type.toUpperCase() === 'SHORT DURATION' ||
-          p.program_type.toUpperCase() === 'SHORT_DURATION'));
-
-    return matchesSearch && matchesType;
+    return matchesSearch;
   });
 
   return (
@@ -133,7 +126,7 @@ export const HRProgramManagement: React.FC = () => {
               Training Programs & Curricula
             </h1>
             <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 font-medium">
-              Create, configure, and manage traineeships, bootcamps, mentor bindings, and skill requirements.
+              3 Active Academic Programs: Full Stack Development (FSD), AI/ML, and Business Analyst (BA).
             </p>
           </div>
 
@@ -148,31 +141,20 @@ export const HRProgramManagement: React.FC = () => {
           </Button>
         </div>
 
-        {/* Search & Filter Control Bar */}
+        {/* Search Control Bar */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white dark:bg-slate-900/40 p-4 border border-slate-200 dark:border-slate-800/80 rounded-xl shadow-xs">
-          <div className="relative w-full sm:w-80">
+          <div className="relative w-full sm:w-96">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <Input
-              placeholder="Search programs by name, code, or type..."
+              placeholder="Search our 3 programs by title or code..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-9 text-xs w-full"
             />
           </div>
-
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <Filter className="w-4 h-4 text-slate-500 dark:text-slate-400" />
-            <select
-              value={selectedType}
-              onChange={(e) => setSelectedType(e.target.value)}
-              className="px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-lg text-slate-900 dark:text-slate-100 text-xs font-semibold focus:ring-2 focus:ring-indigo-500 outline-none"
-            >
-              <option value="ALL">All Program Types</option>
-              <option value="Tech Master">Tech Master</option>
-              <option value="Short Duration">Short Duration</option>
-              <option value="Internship">Internship</option>
-            </select>
-          </div>
+          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+            Showing {filteredPrograms.length} Training Program{filteredPrograms.length === 1 ? '' : 's'}
+          </span>
         </div>
 
         {isLoading && <Loading message="Loading programs catalog..." />}
@@ -186,8 +168,8 @@ export const HRProgramManagement: React.FC = () => {
                 <div className="space-y-1">
                   <h3 className="text-lg font-bold text-slate-900 dark:text-slate-200">No Programs Found</h3>
                   <p className="text-xs text-slate-600 dark:text-slate-400 max-w-sm mx-auto font-medium">
-                    {searchTerm || selectedType !== 'ALL'
-                      ? 'No programs matched your current search filters.'
+                    {searchTerm
+                      ? 'No programs matched your current search query.'
                       : 'Get started by creating your first program with mentor assignment, capacity, dates, and required skills.'}
                   </p>
                 </div>
@@ -421,7 +403,6 @@ export const HRProgramManagement: React.FC = () => {
                       onChange={(e) => handleBatchFilterChange(e.target.value)}
                       className="px-2.5 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     >
-                      <option value="">All Cohorts (Course Standard)</option>
                       {programBatches.map((b) => (
                         <option key={b.id} value={b.id}>{b.name}</option>
                       ))}

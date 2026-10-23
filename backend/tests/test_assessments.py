@@ -229,3 +229,108 @@ def test_assessment_lifecycle_and_evaluation(client, db_session):
     assert anon_item["student_name"] == "Anonymous Trainee"
     assert anon_item["student_id"] is None
 
+
+def test_curriculum_skills_unlocked_by_assessment_pass(client, db_session):
+    # 1. Setup user, student, batch, program
+    mentor = User(
+        id="usr-mentor-skills-01",
+        email="mentor_skills@test.com",
+        full_name="Varsha Yaduvanshi",
+        role="MENTOR",
+        is_active=True
+    )
+    student_user = User(
+        id="usr-stu-skills-01",
+        email="student_skills@test.com",
+        full_name="Aarav Sharma",
+        role="STUDENT",
+        is_active=True
+    )
+    db_session.add_all([mentor, student_user])
+    db_session.commit()
+
+    prog = Program(
+        title="Python Full Stack Engineering",
+        code="PY-FSE-2026",
+        duration_weeks=16
+    )
+    db_session.add(prog)
+    db_session.commit()
+
+    batch = Batch(
+        name="Batch Python-2026A",
+        program_id=prog.id,
+        mentor_id=mentor.id,
+        start_date=datetime.utcnow().date(),
+        end_date=(datetime.utcnow() + timedelta(days=120)).date(),
+        status="ACTIVE"
+    )
+    db_session.add(batch)
+    db_session.commit()
+
+    student = Student(
+        user_id=student_user.id,
+        program_id=prog.id,
+        batch_id=batch.id,
+        mentor_id=mentor.id,
+        roll_number="NL-PY-001"
+    )
+    db_session.add(student)
+    db_session.commit()
+
+    headers_mentor = {"Authorization": f"Bearer mock_jwt_token_{mentor.id}"}
+    headers_student = {"Authorization": f"Bearer mock_jwt_token_{student_user.id}"}
+
+    # 2. Mentor creates assessment unlocking a specific skill
+    assess_payload = {
+        "title": "Python Basics & Algorithmic Thinking",
+        "description": "Baseline evaluation for core python syntax and structures",
+        "level": "ENTRY_LEVEL",
+        "batch_id": batch.id,
+        "scheduled_date": (datetime.utcnow() + timedelta(days=1)).isoformat(),
+        "duration_minutes": 60,
+        "total_marks": 100,
+        "passing_marks": 40,
+        "skill_unlocked": "Python Beginner: Syntax & Fundamentals"
+    }
+    create_res = client.post("/api/v1/assessments", json=assess_payload, headers=headers_mentor)
+    assert create_res.status_code == 201
+    assess_id = create_res.json()["id"]
+
+    # 3. Initially, student skills shows LOCKED
+    skills_res1 = client.get("/api/v1/assessments/student-curriculum-skills", headers=headers_student)
+    assert skills_res1.status_code == 200
+    skills_data1 = skills_res1.json()
+    assert skills_data1["student_name"] == "Aarav Sharma"
+    target_skill = next((s for s in skills_data1["skills"] if s["skill_name"] == "Python Beginner: Syntax & Fundamentals"), None)
+    assert target_skill is not None
+    assert target_skill["is_unlocked"] is False
+    assert target_skill["status"] == "LOCKED"
+
+    # 4. Mentor unlocks assessment, student submits, mentor grades with passing marks 85/100
+    client.put(f"/api/v1/assessments/{assess_id}/toggle-lock", json={"is_unlocked": True}, headers=headers_mentor)
+    client.post(f"/api/v1/assessments/{assess_id}/submit", json={"submission_link": "https://github.com/aarav/python-basics"}, headers=headers_student)
+
+    # Get submission ID
+    subs_res = client.get(f"/api/v1/assessment-submissions?assessment_id={assess_id}", headers=headers_mentor)
+    sub_id = subs_res.json()[0]["id"]
+
+    # Evaluate submission as passed
+    eval_res = client.put(f"/api/v1/assessment-submissions/{sub_id}/evaluate", json={"marks_obtained": 85, "feedback": "Exemplary understanding of Python syntax."}, headers=headers_mentor)
+    assert eval_res.status_code == 200
+    assert eval_res.json()["is_passed"] is True
+
+    # 5. Now check student skills -> Skill is UNLOCKED!
+    skills_res2 = client.get("/api/v1/assessments/student-curriculum-skills", headers=headers_student)
+    assert skills_res2.status_code == 200
+    skills_data2 = skills_res2.json()
+    unlocked_target = next((s for s in skills_data2["skills"] if s["skill_name"] == "Python Beginner: Syntax & Fundamentals"), None)
+    assert unlocked_target is not None
+    assert unlocked_target["is_unlocked"] is True
+    assert unlocked_target["status"] == "UNLOCKED"
+    assert unlocked_target["marks_obtained"] == 85.0
+    assert unlocked_target["score_percentage"] == 85.0
+    assert unlocked_target["unlocked_by_name"] == "Varsha Yaduvanshi"
+    assert skills_data2["unlocked_skills"] >= 1
+
+

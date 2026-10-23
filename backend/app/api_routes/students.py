@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.core.auth import get_current_user
-from app.core.permissions import require_staff, require_hr, verify_student_access
+from app.core.permissions import require_staff, require_hr, verify_student_access, require_role
 from app.models.all_models import User, Student
 from app.schemas.all_schemas import (
     StudentResponse, StudentCreate, StudentUpdate, MentorAssignmentPayload,
@@ -214,5 +214,62 @@ def upload_my_cv(
         target_role="HR",
         link_url=f"/hr/students/{student.id}",
     )
+
+    return student
+
+
+class ReleaseCertificatePayload(BaseModel):
+    approve: bool = True
+
+
+@router.put("/{student_id}/release-certificate", response_model=StudentResponse, summary="Mentor Release/Lock Certificate Approval")
+def release_student_certificate(
+    student_id: str,
+    payload: ReleaseCertificatePayload,
+    current_user: User = Depends(require_role(["MENTOR", "SUPER_ADMIN", "HR"])),
+    db: Session = Depends(get_db)
+):
+    """
+    Mentor officially clicks 'Release Certificate' after training completion.
+    This unlocks certificate creation in the HR management portal.
+    """
+    from datetime import datetime
+    from app.services.notification_service import create_notification
+
+    student = db.query(Student).filter(Student.id == student_id).first()
+    if not student:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Student not found."
+        )
+
+    student.certificate_approved_by_mentor = payload.approve
+    student.certificate_approved_at = datetime.utcnow() if payload.approve else None
+    student.certificate_approved_by = current_user.id if payload.approve else None
+    student.updated_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(student)
+
+    if payload.approve:
+        s_name = student.user.full_name if student.user else student.roll_number
+        b_name = student.batch.name if student.batch else "Training Batch"
+        create_notification(
+            db=db,
+            title=f"Certificate Release Approved: {s_name}",
+            message=f"Mentor {current_user.full_name} has officially released certificate for {s_name} ({student.roll_number}) in {b_name}. HR can now issue the certificate.",
+            notification_type="CERTIFICATE",
+            target_role="HR",
+            link_url="/hr/certificates",
+        )
+        if student.user_id:
+            create_notification(
+                db=db,
+                user_id=student.user_id,
+                title="Training Completion Certificate Released!",
+                message=f"Congratulations! Your mentor {current_user.full_name} has released your certificate of completion.",
+                notification_type="CERTIFICATE",
+                link_url="/student",
+            )
 
     return student

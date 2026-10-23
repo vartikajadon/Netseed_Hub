@@ -42,6 +42,7 @@ const MentorAssessmentEvaluation = lazy(() => import('./pages/MentorAssessmentEv
 const MentorScoresheet = lazy(() => import('./pages/MentorScoresheet').then(m => ({ default: m.MentorScoresheet })));
 const MentorProjects = lazy(() => import('./pages/MentorProjects').then(m => ({ default: m.MentorProjects })));
 const StudentTrainerFeedback = lazy(() => import('./pages/StudentTrainerFeedback').then(m => ({ default: m.StudentTrainerFeedback })));
+const StudentSkillsPage = lazy(() => import('./pages/StudentSkillsPage').then(m => ({ default: m.StudentSkillsPage })));
 const HRTrainerFeedback = lazy(() => import('./pages/HRTrainerFeedback').then(m => ({ default: m.HRTrainerFeedback })));
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: string[] }> = ({ children, allowedRoles }) => {
@@ -104,7 +105,7 @@ export const App: React.FC = () => {
                 <Route path="/student/attendance" element={<ProtectedRoute allowedRoles={['STUDENT', 'SUPER_ADMIN']}><StudentAttendancePage /></ProtectedRoute>} />
                 <Route path="/student/tasks" element={<ProtectedRoute allowedRoles={['STUDENT', 'SUPER_ADMIN']}><StudentTasksPage /></ProtectedRoute>} />
                 <Route path="/student/assessments" element={<ProtectedRoute allowedRoles={['STUDENT', 'SUPER_ADMIN']}><StudentAssessments /></ProtectedRoute>} />
-                <Route path="/student/skills" element={<ProtectedRoute allowedRoles={['STUDENT', 'SUPER_ADMIN']}><SectionPage title="My Skill Metrics" subtitle="Skill Evaluations" category="STUDENT" description="Historical technical skill evaluations and radar chart metrics." /></ProtectedRoute>} />
+                <Route path="/student/skills" element={<ProtectedRoute allowedRoles={['STUDENT', 'SUPER_ADMIN']}><StudentSkillsPage /></ProtectedRoute>} />
                 <Route path="/student/career" element={<ProtectedRoute allowedRoles={['STUDENT', 'SUPER_ADMIN']}><HRCareerPath /></ProtectedRoute>} />
                 <Route path="/student/feedback" element={<ProtectedRoute allowedRoles={['STUDENT', 'SUPER_ADMIN']}><StudentFeedbackPage /></ProtectedRoute>} />
                 <Route path="/student/trainer-feedback" element={<ProtectedRoute allowedRoles={['STUDENT', 'SUPER_ADMIN']}><StudentTrainerFeedback /></ProtectedRoute>} />

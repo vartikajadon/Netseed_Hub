@@ -23,7 +23,7 @@ export const Button: React.FC<ButtonProps> = ({
     outline: 'border border-slate-300 hover:bg-slate-100 text-slate-800 focus:ring-slate-400 dark:border-slate-700 dark:hover:bg-slate-800 dark:text-slate-200 dark:focus:ring-slate-600',
     danger: 'bg-rose-600 hover:bg-rose-700 text-white focus:ring-rose-500 shadow-md shadow-rose-600/20',
     ghost: 'hover:bg-slate-100 text-slate-700 hover:text-slate-900 focus:ring-slate-400 dark:hover:bg-slate-800/70 dark:text-slate-300 dark:hover:text-slate-100 dark:focus:ring-slate-600',
-    white: 'bg-white hover:bg-slate-50 text-indigo-700 hover:text-indigo-800 border border-white/80 focus:ring-indigo-300 shadow-md font-bold',
+    white: 'bg-white hover:bg-slate-50 text-indigo-700 hover:text-indigo-800 border border-white/80 focus:ring-indigo-300 shadow-md font-bold dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-indigo-300 dark:border-slate-700',
   };
 
   const sizes = {

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
 import { api } from '../api/client';
 import { supabase } from '../lib/supabase';
+import { captureCurrentLocation } from '../utils/geolocation';
 
 interface AuthContextType {
   user: User | null;
@@ -104,10 +105,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password?: string): Promise<User> => {
     setIsLoading(true);
     try {
-      // 1. Authenticate against Backend API
+      // 1. Capture user geolocation at login (resilient fallback with timeout)
+      const loc = await captureCurrentLocation(5000);
+
+      // 2. Authenticate against Backend API with captured location
       const authResult = await api.post<{ access_token: string; user: User }>('/auth/login', {
         email,
         password: password || 'default_password',
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        accuracy: loc.accuracy,
       });
 
       const newToken = authResult.access_token;
@@ -139,8 +146,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async () => {
     setIsLoading(true);
     try {
+      // 1. Capture user geolocation at logout (resilient fallback with timeout)
+      const loc = await captureCurrentLocation(4000);
+
       try {
-        await api.post('/auth/logout', {});
+        await api.post('/auth/logout', {
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+          accuracy: loc.accuracy,
+        });
       } catch {
         // Ignore network errors on logout
       }
