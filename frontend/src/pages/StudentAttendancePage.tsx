@@ -34,14 +34,14 @@ export const StudentAttendancePage: React.FC = () => {
   const [reqModalError, setReqModalError] = useState<string | null>(null);
   const [reqSuccessMsg, setReqSuccessMsg] = useState<string | null>(null);
 
-  const fetchData = async () => {
+  const fetchData = async (bypassCache = false) => {
     try {
-      setIsLoading(true);
+      if (!summary && history.length === 0) setIsLoading(true);
       const [studentRes, summaryRes, historyRes, reqsRes] = await Promise.all([
-        api.get<Student>('/students/me').catch(() => null),
-        api.get<StudentAttendanceSummary>('/attendance/my-summary').catch(() => null),
-        api.get<AttendanceDailyRecord[]>('/attendance/my-records').catch(() => []),
-        api.get<RegularizationRequest[]>('/attendance/my-regularization-requests').catch(() => []),
+        api.get<Student>('/students/me', { bypassCache }),
+        api.get<StudentAttendanceSummary>('/attendance/my-summary', { bypassCache }),
+        api.get<AttendanceDailyRecord[]>('/attendance/my-records', { bypassCache }),
+        api.get<RegularizationRequest[]>('/attendance/my-regularization-requests', { bypassCache }),
       ]);
 
       setStudent(studentRes);
@@ -276,10 +276,10 @@ export const StudentAttendancePage: React.FC = () => {
           </div>
         </div>
 
-        {isLoading && <Loading message="Loading attendance records..." />}
+        {isLoading && !summary && history.length === 0 && <Loading message="Loading attendance records..." />}
         {error && <ErrorMessage message={error} />}
 
-        {!isLoading && (
+        {(!isLoading || summary || history.length > 0) && (
           <>
             {/* Today's Status Banner */}
             {summary && (

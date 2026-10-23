@@ -87,12 +87,49 @@ const RootRedirect: React.FC = () => {
   return <Navigate to={getDashboardRoute(user.role)} replace />;
 };
 
+const RoutePreloader: React.FC = () => {
+  const { user } = useAuth();
+
+  React.useEffect(() => {
+    if (!user) return;
+
+    const prewarm = () => {
+      if (user.role === 'STUDENT') {
+        import('./pages/StudentDashboard');
+        import('./pages/StudentCurriculumPage');
+        import('./pages/StudentAttendancePage');
+        import('./pages/StudentSkillsPage');
+        import('./pages/StudentTasksPage');
+        import('./pages/StudentAssessments');
+        import('./pages/StudentFeedbackPage');
+      } else if (user.role === 'MENTOR') {
+        import('./pages/MentorDashboard');
+        import('./pages/MentorStudentsPage');
+        import('./pages/MentorCurriculumPage');
+        import('./pages/MentorAssessments');
+        import('./pages/MentorAssessmentEvaluation');
+        import('./pages/MentorTaskAssignment');
+        import('./pages/MentorFeedbackPage');
+      }
+    };
+
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      (window as any).requestIdleCallback(prewarm);
+    } else {
+      setTimeout(prewarm, 1200);
+    }
+  }, [user?.role]);
+
+  return null;
+};
+
 export const App: React.FC = () => {
   return (
     <ThemeProvider>
       <AuthProvider>
         <NotificationProvider>
           <BrowserRouter>
+            <RoutePreloader />
             <Suspense fallback={<Loading fullScreen message="Loading page..." />}>
               <Routes>
                 <Route path="/" element={<RootRedirect />} />

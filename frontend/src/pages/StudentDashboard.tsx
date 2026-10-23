@@ -68,49 +68,53 @@ export const StudentDashboard: React.FC = () => {
 
   const fetchDashboardData = async () => {
     try {
-      setIsLoading(true);
       if (user) {
-        const [myStudent, myConsents, summaryRes, pendingNoDues, feeRes, lettersRes, certsRes, feedbackRes, curriculumRes] = await Promise.all([
+        // Stage 1: Fast Critical Path (Hero profile, attendance summary, and curriculum)
+        const [myStudent, summaryRes, curriculumRes] = await Promise.all([
           api.get<Student>('/students/me').catch(() => null),
-          api.get<Consent[]>(`/consents?user_id=${user.id}`).catch(() => []),
           api.get<StudentAttendanceSummary>('/attendance/my-summary').catch(() => null),
+          api.get<ProgramCurriculum>('/curriculum/my-curriculum').catch(() => null),
+        ]);
+
+        setStudent(myStudent);
+        setAttendanceSummary(summaryRes);
+        setMyCurriculum(curriculumRes);
+        setIsLoading(false); // Render dashboard immediately without waiting for secondary requests
+
+        // Stage 2: Secondary Data (Consents, letters, certs, feedbacks, no dues, fees)
+        Promise.all([
+          api.get<Consent[]>(`/consents?user_id=${user.id}`).catch(() => []),
           api.get<NoDuesRequest | null>('/no-dues/requests/my-pending').catch(() => null),
           api.get<StudentFeeSummary[]>('/fees/students').then(r => (Array.isArray(r) && r.length > 0 ? r[0] : null)).catch(() => null),
           api.get<IssuedLetter[]>('/letters/my-letters').catch(() => []),
           api.get<IssuedCertificate[]>('/certificates/my-certificates').catch(() => []),
           api.get<MentorFeedbackItem[]>('/feedbacks').catch(() => []),
-          api.get<ProgramCurriculum>('/curriculum/my-curriculum').catch(() => null),
-        ]);
+        ]).then(([myConsents, pendingNoDues, feeRes, lettersRes, certsRes, feedbackRes]) => {
+          setConsents(myConsents);
+          setFeeSummary(feeRes);
+          setMyLetters(lettersRes || []);
+          setMyCertificates(certsRes || []);
+          setMyFeedbacks(feedbackRes || []);
 
-        setStudent(myStudent);
-        setConsents(myConsents);
-        setAttendanceSummary(summaryRes);
-        setFeeSummary(feeRes);
-        setMyLetters(lettersRes || []);
-        setMyCertificates(certsRes || []);
-        setMyFeedbacks(feedbackRes || []);
-        setMyCurriculum(curriculumRes);
-
-        if (pendingNoDues) {
-          const filteredItems = (pendingNoDues.checklist_items || []).filter((item) => {
-            const n = (item.item_name || '').toLowerCase();
-            const d = (item.department || '').toLowerCase();
-            return !['library', 'it asset', 'laptop', 'hostel', 'hardware'].some((t) => n.includes(t) || d.includes(t));
-          });
-          setActiveNoDues({ ...pendingNoDues, checklist_items: filteredItems });
-          setStudentChecklist(filteredItems);
-          setStudentNotes(pendingNoDues.student_notes || '');
-          // Automatically trigger popup modal if form is waiting for student action!
-          if (pendingNoDues.status === 'PENDING_STUDENT') {
-            setIsNoDuesModalOpen(true);
+          if (pendingNoDues) {
+            const filteredItems = (pendingNoDues.checklist_items || []).filter((item) => {
+              const n = (item.item_name || '').toLowerCase();
+              const d = (item.department || '').toLowerCase();
+              return !['library', 'it asset', 'laptop', 'hostel', 'hardware'].some((t) => n.includes(t) || d.includes(t));
+            });
+            setActiveNoDues({ ...pendingNoDues, checklist_items: filteredItems });
+            setStudentChecklist(filteredItems);
+            setStudentNotes(pendingNoDues.student_notes || '');
+            if (pendingNoDues.status === 'PENDING_STUDENT') {
+              setIsNoDuesModalOpen(true);
+            }
+          } else {
+            setActiveNoDues(null);
           }
-        } else {
-          setActiveNoDues(null);
-        }
+        }).catch(() => {});
       }
     } catch (err: any) {
       setError(err.message || 'Failed to fetch student dashboard data');
-    } finally {
       setIsLoading(false);
     }
   };

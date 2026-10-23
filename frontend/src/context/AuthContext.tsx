@@ -29,8 +29,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('access_token'));
   const [isLoading, setIsLoading] = useState<boolean>(() => {
-    // If there is no token in localStorage, the user is unauthenticated: don't block
-    return !!localStorage.getItem('access_token');
+    // If we have both user data and access token in localStorage, hydrate immediately without blocking!
+    const savedUser = localStorage.getItem('user_data');
+    const savedToken = localStorage.getItem('access_token');
+    return !(savedUser && savedToken);
   });
 
   const isSupabaseConfigured = () => {
@@ -38,7 +40,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return url && !url.includes('your-project.supabase.co');
   };
 
-  // Restore & validate session on mount or token change
+  // Restore & validate session on mount or token change (Stale-While-Revalidate)
   const restoreSession = async () => {
     try {
       let activeToken: string | null = localStorage.getItem('access_token');
@@ -64,15 +66,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      // 2. Validate token against Backend FastAPI /auth/me endpoint (Zero Client Trust)
       setToken(activeToken);
       localStorage.setItem('access_token', activeToken);
 
+      // Revalidate in background without blocking if user was already cached
       const currentUser = await api.get<User>('/auth/me');
       setUser(currentUser);
       localStorage.setItem('user_data', JSON.stringify(currentUser));
     } catch (err) {
       console.warn('Authentication session validation failed:', err);
+      // Only clear if definitely unauthorized
       setUser(null);
       setToken(null);
       localStorage.removeItem('access_token');

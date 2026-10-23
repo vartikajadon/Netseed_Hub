@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.core.permissions import get_current_user, require_role
@@ -18,10 +19,31 @@ from app.services.notification_service import create_notification
 
 router = APIRouter(prefix="/tasks", tags=["Task Assignment & Evaluation"])
 
-def serialize_task(t: Task, db: Session) -> TaskResponse:
-    batch = db.query(Batch).filter(Batch.id == t.batch_id).first()
-    mentor = db.query(User).filter(User.id == t.mentor_id).first() if t.mentor_id else None
-    submission_count = db.query(TaskSubmission).filter(TaskSubmission.task_id == t.id).count()
+def serialize_task(
+    t: Task,
+    db: Session,
+    batches_map: Optional[dict] = None,
+    mentors_map: Optional[dict] = None,
+    sub_counts_map: Optional[dict] = None
+) -> TaskResponse:
+    if batches_map is not None:
+        batch_name = batches_map.get(t.batch_id)
+    else:
+        batch = db.query(Batch).filter(Batch.id == t.batch_id).first()
+        batch_name = batch.name if batch else None
+
+    if mentors_map is not None:
+        mentor_name = mentors_map.get(t.mentor_id)
+    elif t.mentor_id:
+        mentor = db.query(User).filter(User.id == t.mentor_id).first()
+        mentor_name = mentor.full_name if mentor else None
+    else:
+        mentor_name = None
+
+    if sub_counts_map is not None:
+        submission_count = sub_counts_map.get(t.id, 0)
+    else:
+        submission_count = db.query(TaskSubmission).filter(TaskSubmission.task_id == t.id).count()
 
     assigned_ids = []
     if t.assigned_student_ids:
@@ -37,9 +59,9 @@ def serialize_task(t: Task, db: Session) -> TaskResponse:
         file_url=t.file_url,
         file_name=t.file_name,
         batch_id=t.batch_id,
-        batch_name=batch.name if batch else None,
+        batch_name=batch_name,
         mentor_id=t.mentor_id,
-        mentor_name=mentor.full_name if mentor else None,
+        mentor_name=mentor_name,
         due_date=t.due_date,
         assign_to_all=t.assign_to_all,
         assigned_student_ids=assigned_ids,
@@ -48,19 +70,54 @@ def serialize_task(t: Task, db: Session) -> TaskResponse:
         created_at=t.created_at
     )
 
-def serialize_submission(sub: TaskSubmission, db: Session) -> TaskSubmissionResponse:
-    task = db.query(Task).filter(Task.id == sub.task_id).first()
-    student = db.query(Student).filter(Student.id == sub.student_id).first()
-    student_user = student.user if student else None
-    batch = db.query(Batch).filter(Batch.id == student.batch_id).first() if student and student.batch_id else None
-    evaluator = db.query(User).filter(User.id == sub.evaluated_by).first() if sub.evaluated_by else None
+def serialize_submission(
+    sub: TaskSubmission,
+    db: Session,
+    tasks_map: Optional[dict] = None,
+    students_map: Optional[dict] = None,
+    users_map: Optional[dict] = None,
+    batches_map: Optional[dict] = None
+) -> TaskSubmissionResponse:
+    if tasks_map is not None:
+        task = tasks_map.get(sub.task_id)
+    else:
+        task = db.query(Task).filter(Task.id == sub.task_id).first()
+
+    if students_map is not None:
+        student = students_map.get(sub.student_id)
+    else:
+        student = db.query(Student).filter(Student.id == sub.student_id).first()
+
+    student_user = None
+    if student:
+        if users_map is not None:
+            student_user = users_map.get(student.user_id)
+        else:
+            student_user = student.user
+
+    batch_name = None
+    batch_id = student.batch_id if student and student.batch_id else (task.batch_id if task else None)
+    if batches_map is not None:
+        batch_name = batches_map.get(batch_id)
+    elif batch_id:
+        batch = db.query(Batch).filter(Batch.id == batch_id).first()
+        batch_name = batch.name if batch else None
+
+    evaluator_name = None
+    if sub.evaluated_by:
+        if users_map is not None:
+            eval_user = users_map.get(sub.evaluated_by)
+            evaluator_name = eval_user.full_name if eval_user else None
+        else:
+            evaluator = db.query(User).filter(User.id == sub.evaluated_by).first()
+            evaluator_name = evaluator.full_name if evaluator else None
 
     return TaskSubmissionResponse(
         id=sub.id,
         task_id=sub.task_id,
         task_title=task.title if task else "Untitled Task",
-        batch_id=batch.id if batch else (task.batch_id if task else None),
-        batch_name=batch.name if batch else None,
+        batch_id=batch_id,
+        batch_name=batch_name,
         student_id=sub.student_id,
         student_name=student_user.full_name if student_user else "Unknown Student",
         student_roll_no=student.roll_number if student else "N/A",
@@ -74,7 +131,7 @@ def serialize_submission(sub: TaskSubmission, db: Session) -> TaskSubmissionResp
         marks=float(sub.marks) if sub.marks is not None else None,
         max_marks=sub.max_marks or 100,
         feedback=sub.feedback,
-        evaluated_by_name=evaluator.full_name if evaluator else None,
+        evaluated_by_name=evaluator_name,
         evaluated_at=sub.evaluated_at,
         ack_sent_to_student=sub.ack_sent_to_student or False,
         ack_sent_to_hr=sub.ack_sent_to_hr or False,
@@ -106,30 +163,58 @@ def list_tasks(
         if not student_profile or not student_profile.batch_id:
             return []
         query = query.filter(Task.batch_id == student_profile.batch_id)
-        # Filter for student: either assigned to all or student_profile.id is in assigned_student_ids
         tasks = query.order_by(Task.created_at.desc()).all()
-        result = []
+
+        eligible_tasks = []
         for t in tasks:
             if t.assign_to_all:
-                result.append(serialize_task(t, db))
+                eligible_tasks.append(t)
             else:
                 try:
                     s_ids = json.loads(t.assigned_student_ids or "[]")
                     if student_profile.id in s_ids:
-                        result.append(serialize_task(t, db))
+                        eligible_tasks.append(t)
                 except Exception:
                     pass
-        return result
+        tasks = eligible_tasks
+    else:
+        if batch_id:
+            query = query.filter(Task.batch_id == batch_id)
+        if mentor_id:
+            query = query.filter(Task.mentor_id == mentor_id)
+        if search:
+            query = query.filter(Task.title.ilike(f"%{search}%"))
+        tasks = query.order_by(Task.created_at.desc()).all()
 
-    if batch_id:
-        query = query.filter(Task.batch_id == batch_id)
-    if mentor_id:
-        query = query.filter(Task.mentor_id == mentor_id)
-    if search:
-        query = query.filter(Task.title.ilike(f"%{search}%"))
+    if not tasks:
+        return []
 
-    tasks = query.order_by(Task.created_at.desc()).all()
-    return [serialize_task(t, db) for t in tasks]
+    # Batch pre-fetch lookups to eliminate N+1 queries
+    batch_ids = {t.batch_id for t in tasks if t.batch_id}
+    mentor_ids = {t.mentor_id for t in tasks if t.mentor_id}
+    task_ids = [t.id for t in tasks]
+
+    batches_map = {}
+    if batch_ids:
+        b_rows = db.query(Batch.id, Batch.name).filter(Batch.id.in_(batch_ids)).all()
+        batches_map = {b[0]: b[1] for b in b_rows}
+
+    mentors_map = {}
+    if mentor_ids:
+        m_rows = db.query(User.id, User.full_name).filter(User.id.in_(mentor_ids)).all()
+        mentors_map = {m[0]: m[1] for m in m_rows}
+
+    sub_counts_map = {}
+    if task_ids:
+        counts = db.query(TaskSubmission.task_id, func.count(TaskSubmission.id)).filter(
+            TaskSubmission.task_id.in_(task_ids)
+        ).group_by(TaskSubmission.task_id).all()
+        sub_counts_map = {c[0]: c[1] for c in counts}
+
+    return [
+        serialize_task(t, db, batches_map=batches_map, mentors_map=mentors_map, sub_counts_map=sub_counts_map)
+        for t in tasks
+    ]
 
 
 @router.post("", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
@@ -326,11 +411,56 @@ def list_task_submissions(
         query = query.filter(TaskSubmission.status == status_filter)
 
     submissions = query.order_by(TaskSubmission.submitted_at.desc()).all()
+    if not submissions:
+        return []
+
+    # Batch pre-fetch lookups to eliminate N+1 queries
+    task_ids = {s.task_id for s in submissions if s.task_id}
+    student_ids = {s.student_id for s in submissions if s.student_id}
+    eval_user_ids = {s.evaluated_by for s in submissions if s.evaluated_by}
+
+    tasks_map = {}
+    if task_ids:
+        t_rows = db.query(Task).filter(Task.id.in_(task_ids)).all()
+        tasks_map = {t.id: t for t in t_rows}
+
+    students_map = {}
+    student_user_ids = set()
+    batch_ids = set()
+    if student_ids:
+        st_rows = db.query(Student).filter(Student.id.in_(student_ids)).all()
+        students_map = {st.id: st for st in st_rows}
+        for st in st_rows:
+            if st.user_id:
+                student_user_ids.add(st.user_id)
+            if st.batch_id:
+                batch_ids.add(st.batch_id)
+
+    all_user_ids = eval_user_ids.union(student_user_ids)
+    users_map = {}
+    if all_user_ids:
+        u_rows = db.query(User).filter(User.id.in_(all_user_ids)).all()
+        users_map = {u.id: u for u in u_rows}
+
+    for t in tasks_map.values():
+        if t.batch_id:
+            batch_ids.add(t.batch_id)
+
+    batches_map = {}
+    if batch_ids:
+        b_rows = db.query(Batch.id, Batch.name).filter(Batch.id.in_(batch_ids)).all()
+        batches_map = {b[0]: b[1] for b in b_rows}
 
     # Filter in memory if batch_id or search is provided
     results = []
     for sub in submissions:
-        serialized = serialize_submission(sub, db)
+        serialized = serialize_submission(
+            sub, db,
+            tasks_map=tasks_map,
+            students_map=students_map,
+            users_map=users_map,
+            batches_map=batches_map
+        )
         if batch_id and serialized.batch_id != batch_id:
             continue
         if search:

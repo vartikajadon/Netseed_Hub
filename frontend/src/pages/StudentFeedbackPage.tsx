@@ -15,12 +15,12 @@ export const StudentFeedbackPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchMyFeedbacks = async () => {
+  const fetchMyFeedbacks = async (bypassCache = false) => {
     try {
-      setIsLoading(true);
+      if (feedbacks.length === 0) setIsLoading(true);
       setError(null);
       // Backend automatically enforces isolation to student's own record
-      const data = await api.get<MentorFeedbackItem[]>('/feedbacks');
+      const data = await api.get<MentorFeedbackItem[]>('/feedbacks', { bypassCache });
       setFeedbacks(data || []);
     } catch (err: any) {
       setError(err.message || 'Failed to load your mentor feedback.');
@@ -53,7 +53,7 @@ export const StudentFeedbackPage: React.FC = () => {
           </div>
 
           <button
-            onClick={fetchMyFeedbacks}
+            onClick={() => fetchMyFeedbacks(true)}
             className="self-stretch sm:self-auto justify-center px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold hover:border-slate-300 dark:hover:border-slate-700 flex items-center gap-1.5 transition-colors min-h-[38px]"
           >
             <RefreshCw className="w-3.5 h-3.5 text-slate-500 shrink-0" />
@@ -98,7 +98,7 @@ export const StudentFeedbackPage: React.FC = () => {
         </div>
 
         {/* Feedback List */}
-        {isLoading ? (
+        {isLoading && feedbacks.length === 0 ? (
           <Loading message="Loading feedback evaluations..." />
         ) : feedbacks.length === 0 ? (
           <Card>

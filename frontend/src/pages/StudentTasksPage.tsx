@@ -40,13 +40,13 @@ export const StudentTasksPage: React.FC = () => {
   // Details Modal state
   const [viewingTask, setViewingTask] = useState<TaskResponse | null>(null);
 
-  const fetchStudentTasksData = async () => {
-    setIsLoading(true);
+  const fetchStudentTasksData = async (bypassCache = false) => {
+    if (tasks.length === 0) setIsLoading(true);
     setError(null);
     try {
       const [tasksRes, subsRes] = await Promise.all([
-        api.get<TaskResponse[]>('/tasks'),
-        api.get<TaskSubmissionResponse[]>('/task-submissions'),
+        api.get<TaskResponse[]>('/tasks', { bypassCache }),
+        api.get<TaskSubmissionResponse[]>('/task-submissions', { bypassCache }),
       ]);
       setTasks(tasksRes || []);
       setSubmissions(subsRes || []);
@@ -193,7 +193,7 @@ export const StudentTasksPage: React.FC = () => {
           <Button
             variant="secondary"
             size="sm"
-            onClick={fetchStudentTasksData}
+            onClick={() => fetchStudentTasksData(true)}
             className="flex items-center gap-1.5 self-start md:self-auto"
           >
             <RefreshCw className="w-3.5 h-3.5" />
@@ -354,10 +354,10 @@ export const StudentTasksPage: React.FC = () => {
         </div>
 
         {/* Task Cards List */}
-        {isLoading && <Loading message="Loading your assigned tasks..." />}
+        {isLoading && tasks.length === 0 && <Loading message="Loading your assigned tasks..." />}
         {error && <ErrorMessage message={error} />}
 
-        {!isLoading && !error && filteredTasks.length === 0 && (
+        {!error && (tasks.length > 0 || !isLoading) && filteredTasks.length === 0 && (
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-12 text-center shadow-xs">
             <CheckSquare className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
             <h3 className="font-bold text-base text-slate-800 dark:text-slate-200">No tasks found</h3>

@@ -3,9 +3,9 @@
 export const FIXED_BACKEND_API_URL = 'https://netseed-hub.vercel.app/api/v1';
 
 export function getApiBaseUrl(): string {
-  // If running locally in development, target local backend API engine
+  // If running locally in development, target local backend API engine via direct IPv4 to eliminate Windows localhost IPv6 resolution lag
   if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-    return 'http://localhost:8000/api/v1';
+    return 'http://127.0.0.1:8000/api/v1';
   }
 
   // If an environment variable is explicitly supplied (e.g. at build or in deployment), respect it
@@ -44,9 +44,57 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+export interface RequestOptions extends RequestInit {
+  bypassCache?: boolean;
+  cacheTtlMs?: number;
+}
+
+interface CacheEntry {
+  data: any;
+  timestamp: number;
+}
+
+// In-memory cache for ultra-fast instantaneous navigation & deduplication
+const memoryCache = new Map<string, CacheEntry>();
+const inflightRequests = new Map<string, Promise<any>>();
+const DEFAULT_CACHE_TTL_MS = 60 * 1000; // 60 seconds default TTL
+
+export function clearApiCache(prefix?: string) {
+  if (!prefix) {
+    memoryCache.clear();
+    return;
+  }
+  for (const key of memoryCache.keys()) {
+    if (key.includes(prefix)) {
+      memoryCache.delete(key);
+    }
+  }
+}
+
+async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
   const token = localStorage.getItem('access_token');
   const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+  const method = (options.method || 'GET').toUpperCase();
+  const isGet = method === 'GET';
+  const bypassCache = options.bypassCache ?? false;
+  const cacheTtlMs = options.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS;
+
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const cacheKey = `${token || 'anon'}:${cleanEndpoint}`;
+
+  // 1. In-memory Cache & In-flight Deduplication for GET requests
+  if (isGet && !bypassCache) {
+    const cached = memoryCache.get(cacheKey);
+    const now = Date.now();
+    if (cached && now - cached.timestamp < cacheTtlMs) {
+      return cached.data as T;
+    }
+
+    if (inflightRequests.has(cacheKey)) {
+      return inflightRequests.get(cacheKey) as Promise<T>;
+    }
+  }
+
   const headers: HeadersInit = {
     ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -54,68 +102,104 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   };
 
   const baseUrl = getApiBaseUrl();
-  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   const targetUrl = `${baseUrl}${cleanEndpoint}`;
 
-  let response: Response;
-  try {
-    response = await fetch(targetUrl, {
-      ...options,
-      headers,
-    });
-  } catch (err: any) {
-    const rawMsg = err?.message || '';
-    const isNetworkError = rawMsg === 'Failed to fetch' || rawMsg.includes('NetworkError') || rawMsg.includes('fetch');
-
-    let friendlyMsg = rawMsg;
-    if (isNetworkError) {
-      friendlyMsg = `Unable to connect to backend server at ${baseUrl}. Please check that your live backend service is online.`;
-    }
-
-    throw new ApiError(friendlyMsg, 0, { detail: rawMsg, targetUrl });
-  }
-
-  const contentType = response.headers.get('content-type') || '';
-  if (contentType.includes('text/html')) {
-    throw new ApiError(
-      `Received HTML instead of API response from ${targetUrl}. Please ensure your backend URL is configured to point to your live backend domain.`,
-      response.status
-    );
-  }
-
-  if (!response.ok) {
-    let errorData: any;
+  const fetchPromise = (async () => {
+    let response: Response;
     try {
-      errorData = await response.json();
-    } catch {
-      errorData = { detail: response.statusText };
+      response = await fetch(targetUrl, {
+        ...options,
+        headers,
+      });
+    } catch (err: any) {
+      const rawMsg = err?.message || '';
+      const isNetworkError = rawMsg === 'Failed to fetch' || rawMsg.includes('NetworkError') || rawMsg.includes('fetch');
+
+      let friendlyMsg = rawMsg;
+      if (isNetworkError) {
+        friendlyMsg = `Unable to connect to backend server at ${baseUrl}. Please check that your live backend service is online.`;
+      }
+
+      throw new ApiError(friendlyMsg, 0, { detail: rawMsg, targetUrl });
     }
 
-    let message = 'An unexpected API error occurred';
-    if (typeof errorData.detail === 'string') {
-      message = errorData.detail;
-    } else if (Array.isArray(errorData.detail)) {
-      message = errorData.detail
-        .map((d: any) => (typeof d === 'string' ? d : d.msg || JSON.stringify(d)))
-        .join('; ');
-    } else if (errorData.detail && typeof errorData.detail === 'object') {
-      message = JSON.stringify(errorData.detail);
-    } else if (typeof errorData.message === 'string') {
-      message = errorData.message;
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('text/html')) {
+      throw new ApiError(
+        `Received HTML instead of API response from ${targetUrl}. Please ensure your backend URL is configured to point to your live backend domain.`,
+        response.status
+      );
     }
 
-    throw new ApiError(message, response.status, errorData);
+    if (!response.ok) {
+      let errorData: any;
+      try {
+        errorData = await response.json();
+      } catch {
+        errorData = { detail: response.statusText };
+      }
+
+      let message = 'An unexpected API error occurred';
+      if (typeof errorData.detail === 'string') {
+        message = errorData.detail;
+      } else if (Array.isArray(errorData.detail)) {
+        message = errorData.detail
+          .map((d: any) => (typeof d === 'string' ? d : d.msg || JSON.stringify(d)))
+          .join('; ');
+      } else if (errorData.detail && typeof errorData.detail === 'object') {
+        message = JSON.stringify(errorData.detail);
+      } else if (typeof errorData.message === 'string') {
+        message = errorData.message;
+      }
+
+      throw new ApiError(message, response.status, errorData);
+    }
+
+    if (response.status === 204) return {} as T;
+    const result = await response.json();
+
+    // Cache successful GET results
+    if (isGet) {
+      memoryCache.set(cacheKey, {
+        data: result,
+        timestamp: Date.now(),
+      });
+    }
+
+    return result as T;
+  })();
+
+  if (isGet && !bypassCache) {
+    inflightRequests.set(cacheKey, fetchPromise);
+    fetchPromise.finally(() => {
+      inflightRequests.delete(cacheKey);
+    });
   }
 
-  if (response.status === 204) return {} as T;
-  return response.json();
+  return fetchPromise;
 }
 
 export const api = {
-  get: <T>(endpoint: string) => request<T>(endpoint, { method: 'GET' }),
-  post: <T>(endpoint: string, data: any) => request<T>(endpoint, { method: 'POST', body: JSON.stringify(data) }),
-  put: <T>(endpoint: string, data: any) => request<T>(endpoint, { method: 'PUT', body: JSON.stringify(data) }),
-  patch: <T>(endpoint: string, data: any) => request<T>(endpoint, { method: 'PATCH', body: JSON.stringify(data) }),
-  delete: <T>(endpoint: string) => request<T>(endpoint, { method: 'DELETE' }),
-  upload: <T>(endpoint: string, formData: FormData) => request<T>(endpoint, { method: 'POST', body: formData }),
+  get: <T>(endpoint: string, options?: RequestOptions) => request<T>(endpoint, { method: 'GET', ...options }),
+  post: <T>(endpoint: string, data: any, options?: RequestOptions) => {
+    clearApiCache();
+    return request<T>(endpoint, { method: 'POST', body: JSON.stringify(data), ...options });
+  },
+  put: <T>(endpoint: string, data: any, options?: RequestOptions) => {
+    clearApiCache();
+    return request<T>(endpoint, { method: 'PUT', body: JSON.stringify(data), ...options });
+  },
+  patch: <T>(endpoint: string, data: any, options?: RequestOptions) => {
+    clearApiCache();
+    return request<T>(endpoint, { method: 'PATCH', body: JSON.stringify(data), ...options });
+  },
+  delete: <T>(endpoint: string, options?: RequestOptions) => {
+    clearApiCache();
+    return request<T>(endpoint, { method: 'DELETE', ...options });
+  },
+  upload: <T>(endpoint: string, formData: FormData, options?: RequestOptions) => {
+    clearApiCache();
+    return request<T>(endpoint, { method: 'POST', body: formData, ...options });
+  },
+  clearCache: (prefix?: string) => clearApiCache(prefix),
 };

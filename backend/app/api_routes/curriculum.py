@@ -71,6 +71,13 @@ def build_program_curriculum_response(
         if p.topic_id not in progress_map or (p.batch_id == batch_id and batch_id is not None):
             progress_map[p.topic_id] = p
 
+    # Pre-fetch completed_by mentors to eliminate N+1 queries
+    mentor_ids = {p.completed_by for p in progress_map.values() if p and p.completed_by}
+    mentors_map = {}
+    if mentor_ids:
+        m_rows = db.query(User.id, User.full_name).filter(User.id.in_(mentor_ids)).all()
+        mentors_map = {m[0]: m[1] for m in m_rows}
+
     # Build topic responses
     topic_responses: List[TopicItemResponse] = []
     completed_count = 0
@@ -81,7 +88,7 @@ def build_program_curriculum_response(
         if is_done:
             completed_count += 1
 
-        mentor = db.query(User).filter(User.id == prog.completed_by).first() if (prog and prog.completed_by) else None
+        mentor_name = mentors_map.get(prog.completed_by) if (prog and prog.completed_by) else None
 
         topic_responses.append(TopicItemResponse(
             id=t.id,
@@ -93,7 +100,7 @@ def build_program_curriculum_response(
             is_completed=is_done,
             completed_at=prog.completed_at if prog else None,
             completed_by_id=prog.completed_by if prog else None,
-            completed_by_name=mentor.full_name if mentor else None,
+            completed_by_name=mentor_name,
             assessment_name=prog.assessment_name if prog else None,
             notes=prog.notes if prog else None
         ))

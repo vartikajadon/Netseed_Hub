@@ -43,10 +43,12 @@ export const StudentCurriculumPage: React.FC = () => {
     fetchCurriculum();
   }, []);
 
-  if (isLoading) {
+  if (isLoading && !curriculum) {
     return (
       <Layout>
-        <Loading fullScreen message="Loading your program syllabus and progress records..." />
+        <div className="py-24">
+          <Loading message="Loading your program syllabus and progress records..." />
+        </div>
       </Layout>
     );
   }

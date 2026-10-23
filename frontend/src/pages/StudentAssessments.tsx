@@ -201,7 +201,7 @@ export const StudentAssessments: React.FC = () => {
         {/* TAB 1: ASSESSMENTS LIST */}
         {activeTab === 'ASSESSMENTS' && (
           <div className="space-y-6">
-            {isLoading ? (
+            {isLoading && assessments.length === 0 ? (
               <div className="py-16">
                 <Loading message="Loading your scheduled assessments..." />
               </div>

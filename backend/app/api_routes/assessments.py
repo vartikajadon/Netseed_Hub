@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.core.permissions import get_current_user, require_role
@@ -33,10 +34,29 @@ def serialize_assessment(
     db: Session,
     current_user: Optional[User] = None,
     student_record: Optional[Student] = None,
+    batches_map: Optional[dict] = None,
+    mentors_map: Optional[dict] = None,
+    sub_counts_map: Optional[dict] = None,
+    my_subs_map: Optional[dict] = None,
 ) -> AssessmentResponse:
-    batch = db.query(Batch).filter(Batch.id == a.batch_id).first()
-    mentor = db.query(User).filter(User.id == a.mentor_id).first() if a.mentor_id else None
-    submission_count = db.query(AssessmentSubmission).filter(AssessmentSubmission.assessment_id == a.id).count()
+    if batches_map is not None:
+        batch_name = batches_map.get(a.batch_id)
+    else:
+        batch = db.query(Batch).filter(Batch.id == a.batch_id).first()
+        batch_name = batch.name if batch else None
+
+    if mentors_map is not None:
+        mentor_name = mentors_map.get(a.mentor_id)
+    elif a.mentor_id:
+        mentor = db.query(User).filter(User.id == a.mentor_id).first()
+        mentor_name = mentor.full_name if mentor else None
+    else:
+        mentor_name = None
+
+    if sub_counts_map is not None:
+        submission_count = sub_counts_map.get(a.id, 0)
+    else:
+        submission_count = db.query(AssessmentSubmission).filter(AssessmentSubmission.assessment_id == a.id).count()
 
     is_student = current_user and current_user.role == "STUDENT"
     now = datetime.utcnow()
@@ -52,10 +72,13 @@ def serialize_assessment(
     has_submitted = False
     my_sub_data = None
     if student_record:
-        my_sub = db.query(AssessmentSubmission).filter(
-            AssessmentSubmission.assessment_id == a.id,
-            AssessmentSubmission.student_id == student_record.id,
-        ).first()
+        if my_subs_map is not None:
+            my_sub = my_subs_map.get(a.id)
+        else:
+            my_sub = db.query(AssessmentSubmission).filter(
+                AssessmentSubmission.assessment_id == a.id,
+                AssessmentSubmission.student_id == student_record.id,
+            ).first()
         if my_sub:
             has_submitted = True
             my_sub_data = {
@@ -87,9 +110,9 @@ def serialize_assessment(
         description=a.description,
         level=a.level,
         batch_id=a.batch_id,
-        batch_name=batch.name if batch else None,
+        batch_name=batch_name,
         mentor_id=a.mentor_id,
-        mentor_name=mentor.full_name if mentor else None,
+        mentor_name=mentor_name,
         scheduled_date=a.scheduled_date,
         duration_minutes=a.duration_minutes or 60,
         total_marks=a.total_marks or 100,
@@ -173,6 +196,38 @@ def get_assessments(
         query = query.filter(Assessment.level == level)
 
     assessments = query.order_by(Assessment.scheduled_date.asc(), Assessment.created_at.desc()).all()
+    if not assessments:
+        return []
+
+    # Batch pre-fetch maps to eliminate N+1 queries
+    batch_ids = {a.batch_id for a in assessments if a.batch_id}
+    mentor_ids = {a.mentor_id for a in assessments if a.mentor_id}
+    assess_ids = [a.id for a in assessments]
+
+    batches_map = {}
+    if batch_ids:
+        b_rows = db.query(Batch.id, Batch.name).filter(Batch.id.in_(batch_ids)).all()
+        batches_map = {b[0]: b[1] for b in b_rows}
+
+    mentors_map = {}
+    if mentor_ids:
+        m_rows = db.query(User.id, User.full_name).filter(User.id.in_(mentor_ids)).all()
+        mentors_map = {m[0]: m[1] for m in m_rows}
+
+    sub_counts_map = {}
+    if assess_ids:
+        counts = db.query(AssessmentSubmission.assessment_id, func.count(AssessmentSubmission.id)).filter(
+            AssessmentSubmission.assessment_id.in_(assess_ids)
+        ).group_by(AssessmentSubmission.assessment_id).all()
+        sub_counts_map = {c[0]: c[1] for c in counts}
+
+    my_subs_map = {}
+    if student_record and assess_ids:
+        subs = db.query(AssessmentSubmission).filter(
+            AssessmentSubmission.assessment_id.in_(assess_ids),
+            AssessmentSubmission.student_id == student_record.id
+        ).all()
+        my_subs_map = {s.assessment_id: s for s in subs}
 
     # Filter 1-week visibility rule for students
     now = datetime.utcnow()
@@ -182,7 +237,13 @@ def get_assessments(
             is_visible = (now >= (a.scheduled_date - timedelta(days=7))) or a.is_unlocked
             if not is_visible:
                 continue
-        results.append(serialize_assessment(a, db, current_user, student_record))
+        results.append(serialize_assessment(
+            a, db, current_user, student_record,
+            batches_map=batches_map,
+            mentors_map=mentors_map,
+            sub_counts_map=sub_counts_map,
+            my_subs_map=my_subs_map
+        ))
 
     return results
 
@@ -235,6 +296,12 @@ def get_student_curriculum_skills(
     ).all()
     sub_by_assessment = {sub.assessment_id: sub for sub in submissions}
 
+    evaluator_ids = {sub.evaluated_by for sub in submissions if sub.evaluated_by}
+    evaluators_map = {}
+    if evaluator_ids:
+        u_rows = db.query(User.id, User.full_name).filter(User.id.in_(evaluator_ids)).all()
+        evaluators_map = {u[0]: u[1] for u in u_rows}
+
     def get_level_info(level_str: str):
         if level_str == "EXIT_LEVEL":
             return ("EXIT_LEVEL", "Advanced")
@@ -270,8 +337,7 @@ def get_student_curriculum_skills(
             if marks_obtained >= passing:
                 is_passed = True
                 unlocked_at = sub.evaluated_at or sub.updated_at
-                evaluator = db.query(User).filter(User.id == sub.evaluated_by).first() if sub.evaluated_by else None
-                unlocked_by_name = evaluator.full_name if evaluator else "Mentor"
+                unlocked_by_name = evaluators_map.get(sub.evaluated_by, "Mentor") if sub.evaluated_by else "Mentor"
 
         lvl, lvl_lbl = get_level_info(assess.level)
 

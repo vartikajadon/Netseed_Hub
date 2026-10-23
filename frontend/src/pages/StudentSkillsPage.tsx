@@ -122,10 +122,10 @@ export const StudentSkillsPage: React.FC = () => {
         </div>
 
         {/* Loading & Error States */}
-        {isLoading && <Loading message="Loading your curriculum skills and assessment unlock status..." />}
+        {isLoading && !data && <Loading message="Loading your curriculum skills and assessment unlock status..." />}
         {error && <ErrorMessage message={error} />}
 
-        {!isLoading && data && (
+        {data && (
           <>
             {/* KPI Summary Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
