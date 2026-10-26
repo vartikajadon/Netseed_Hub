@@ -10,6 +10,7 @@ import { MentorSelectorModal } from '../components/MentorSelectorModal';
 import { StatusChangeModal } from '../components/StatusChangeModal';
 import { StudentAttendanceCalendarModal } from '../components/StudentAttendanceCalendarModal';
 import { Modal } from '../components/Modal';
+import { FaceEnrollmentModal } from '../components/FaceEnrollmentModal';
 import { api } from '../api/client';
 import { Student, formatBatchType } from '../types';
 import { PhotoAdjusterModal } from '../components/PhotoAdjusterModal';
@@ -29,6 +30,7 @@ import {
   Cake,
   FileText,
   ExternalLink,
+  ShieldCheck,
 } from 'lucide-react';
 
 export const StudentDetailPage: React.FC = () => {
@@ -40,6 +42,7 @@ export const StudentDetailPage: React.FC = () => {
   const [isAssigningMentor, setIsAssigningMentor] = useState(false);
   const [isChangingStatus, setIsChangingStatus] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [isFaceEnrollOpen, setIsFaceEnrollOpen] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -510,18 +513,37 @@ export const StudentDetailPage: React.FC = () => {
                 )}
               </div>
 
-              {/* Face Enrolled Status */}
-              <div className="p-3 bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-between shadow-xs">
-                <div className="flex items-center gap-2">
-                  <UserCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                  <div>
-                    <div className="font-semibold text-slate-900 dark:text-slate-100">Face Enrolled</div>
-                    <div className="text-[10px] text-slate-500 dark:text-slate-400">Biometric Baseline Sample</div>
+              {/* Face Enrolled Status & Action */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <UserCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    <div>
+                      <div className="font-semibold text-slate-900 dark:text-slate-100">Face Enrolled</div>
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400">Biometric Baseline Sample</div>
+                    </div>
                   </div>
+                  <Badge variant={isFaceEnrolled ? 'success' : 'neutral'}>
+                    {student.face_enrollment_status}
+                  </Badge>
                 </div>
-                <Badge variant={isFaceEnrolled ? 'success' : 'neutral'}>
-                  {student.face_enrollment_status}
-                </Badge>
+
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                    {isFaceEnrolled
+                      ? 'Re-register face baseline if student faces punch-in issues'
+                      : 'Enroll student facial vectors for geofenced attendance'}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    onClick={() => setIsFaceEnrollOpen(true)}
+                    className="bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs py-1 px-3 shadow-xs shrink-0"
+                  >
+                    <Camera className="w-3.5 h-3.5 mr-1" />
+                    {isFaceEnrolled ? 'Re-enroll Face' : 'Enroll Face'}
+                  </Button>
+                </div>
               </div>
 
               {/* Data Security Guarantee */}
@@ -687,6 +709,17 @@ export const StudentDetailPage: React.FC = () => {
           onClose={() => setIsAdjusterOpen(false)}
           onSave={handleSaveFittedPhoto}
           isSaving={isUpdatingPhoto}
+        />
+
+        {/* Biometric Face Enrollment / Re-Enrollment Modal */}
+        <FaceEnrollmentModal
+          isOpen={isFaceEnrollOpen}
+          onClose={() => setIsFaceEnrollOpen(false)}
+          onSuccess={() => {
+            setIsFaceEnrollOpen(false);
+            fetchDetails();
+          }}
+          student={student}
         />
       </div>
     </Layout>

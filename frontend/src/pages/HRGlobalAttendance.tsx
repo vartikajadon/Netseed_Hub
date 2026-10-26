@@ -188,6 +188,15 @@ export const HRGlobalAttendance: React.FC = () => {
                 <Camera className="w-3.5 h-3.5" /> Enroll Face
               </button>
             )}
+            {isEnrolled && r.student && (
+              <button
+                onClick={() => setEnrollingStudent(r.student!)}
+                className="mt-1 text-[11px] text-sky-600 dark:text-sky-400 hover:underline flex items-center gap-1 font-semibold"
+                title="Re-enroll biometric facial template"
+              >
+                <RefreshCw className="w-3 h-3" /> Re-enroll Face
+              </button>
+            )}
           </div>
         );
       },

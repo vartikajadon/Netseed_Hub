@@ -147,11 +147,17 @@ export const FaceEnrollmentModal: React.FC<FaceEnrollmentModalProps> = ({
   const currentStep = capturedSamples.length;
   const currentGuide = SAMPLE_GUIDES[Math.min(currentStep, SAMPLE_GUIDES.length - 1)];
 
+  const isReEnrollment = student?.face_enrollment_status === 'ENROLLED';
+
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Biometric Face Baseline Enrollment (HR Registration)"
+      title={
+        isReEnrollment
+          ? `Biometric Face Re-Enrollment (HR Override) — ${student?.user?.full_name || student?.roll_number || 'Trainee'}`
+          : `Biometric Face Baseline Enrollment — ${student?.user?.full_name || student?.roll_number || 'Trainee'}`
+      }
     >
       <div className="space-y-4 text-xs font-sans">
         {error && (
@@ -302,7 +308,11 @@ export const FaceEnrollmentModal: React.FC<FaceEnrollmentModalProps> = ({
             className="w-full sm:w-auto min-h-[40px] text-center justify-center"
           >
             <Sparkles className="w-3.5 h-3.5 mr-1 shrink-0" />
-            <span className="truncate">Save & Enroll ({capturedSamples.length}/3+ samples)</span>
+            <span className="truncate">
+              {isReEnrollment
+                ? `Update & Re-Enroll (${capturedSamples.length}/3+ samples)`
+                : `Save & Enroll (${capturedSamples.length}/3+ samples)`}
+            </span>
           </Button>
         </div>
       </div>

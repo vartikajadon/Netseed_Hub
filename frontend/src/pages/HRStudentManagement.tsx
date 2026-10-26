@@ -12,9 +12,10 @@ import { MentorSelectorModal } from '../components/MentorSelectorModal';
 import { StatusChangeModal } from '../components/StatusChangeModal';
 import { StudentAttendanceCalendarModal } from '../components/StudentAttendanceCalendarModal';
 import { Modal } from '../components/Modal';
+import { FaceEnrollmentModal } from '../components/FaceEnrollmentModal';
 import { api } from '../api/client';
 import { Student, Program, Batch, User, PaginatedStudentList, formatBatchType, BATCH_TYPE_OPTIONS } from '../types';
-import { Users, UserPlus, Search, Filter, Eye, Edit, UserCheck, RefreshCw, Trash2, Calendar } from 'lucide-react';
+import { Users, UserPlus, Search, Filter, Eye, Edit, UserCheck, RefreshCw, Trash2, Calendar, Camera } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export const HRStudentManagement: React.FC = () => {
@@ -44,6 +45,7 @@ export const HRStudentManagement: React.FC = () => {
   const [changingStatusStudent, setChangingStatusStudent] = useState<Student | null>(null);
   const [viewingCalendarStudent, setViewingCalendarStudent] = useState<Student | null>(null);
   const [removingStudent, setRemovingStudent] = useState<Student | null>(null);
+  const [enrollingFaceStudent, setEnrollingFaceStudent] = useState<Student | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -225,6 +227,14 @@ export const HRStudentManagement: React.FC = () => {
             className="w-7 h-7 inline-flex items-center justify-center rounded-lg border border-amber-200 dark:border-amber-800/60 bg-amber-50/70 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/60 shadow-2xs hover:scale-105 active:scale-95 transition-all"
           >
             <UserCheck className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            title={s.face_enrollment_status === 'ENROLLED' ? 'Re-enroll Facial Biometrics' : 'Enroll Facial Biometrics'}
+            onClick={() => setEnrollingFaceStudent(s)}
+            className="w-7 h-7 inline-flex items-center justify-center rounded-lg border border-sky-200 dark:border-sky-800/60 bg-sky-50/70 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 hover:bg-sky-100 dark:hover:bg-sky-900/60 shadow-2xs hover:scale-105 active:scale-95 transition-all"
+          >
+            <Camera className="w-3.5 h-3.5" />
           </button>
           <button
             type="button"
@@ -472,6 +482,17 @@ export const HRStudentManagement: React.FC = () => {
             </div>
           </div>
         </Modal>
+
+        {/* Biometric Facial Enrollment / Re-Enrollment Modal */}
+        <FaceEnrollmentModal
+          isOpen={!!enrollingFaceStudent}
+          onClose={() => setEnrollingFaceStudent(null)}
+          onSuccess={() => {
+            setEnrollingFaceStudent(null);
+            fetchStudents();
+          }}
+          student={enrollingFaceStudent}
+        />
       </div>
     </Layout>
   );

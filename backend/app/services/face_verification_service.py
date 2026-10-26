@@ -39,8 +39,14 @@ def get_insightface_app():
             from insightface.app import FaceAnalysis
             app = FaceAnalysis(name='buffalo_s', providers=['CPUExecutionProvider'])
             app.prepare(ctx_id=-1, det_size=(640, 640))
+            if hasattr(app, 'models') and 'detection' in app.models:
+                try:
+                    app.models['detection'].det_thresh = 0.40
+                except Exception:
+                    pass
             _INSIGHTFACE_APP = app
             logger.info("InsightFace FaceAnalysis (buffalo_s) with ONNX Runtime initialized successfully.")
+
         except Exception as e:
             logger.warning(f"InsightFace initialization deferred or fallback engaged: {e}")
             _INSIGHTFACE_APP = None
@@ -163,17 +169,18 @@ class FaceVerificationService:
         face_roi = image_bgr[y1:y2, x1:x2]
         gray = cv2.cvtColor(face_roi, cv2.COLOR_BGR2GRAY)
 
-        # 1. Blur / Sharpness Check using Laplacian Variance
+        # 1. Blur / Sharpness Check using Laplacian Variance (tolerant to standard webcams)
         lap_var = cv2.Laplacian(gray, cv2.CV_64F).var()
-        if lap_var < 15.0:
+        if lap_var < 10.0:
             return False, 0.35, "Face image is blurry or out of focus. Please hold steady."
 
-        # 2. Illumination & Exposure Check
+        # 2. Illumination & Exposure Check (tolerant to ambient indoor room lighting)
         mean_brightness = np.mean(gray)
-        if mean_brightness < 25.0:
+        if mean_brightness < 18.0:
             return False, 0.40, "Lighting is too dark. Please ensure face is well illuminated."
-        if mean_brightness > 240.0:
+        if mean_brightness > 245.0:
             return False, 0.40, "Lighting is overexposed or washed out."
+
 
         # Compute normalized quality score (0.0 to 1.0)
         norm_sharpness = min(1.0, lap_var / 150.0)
@@ -240,10 +247,11 @@ class FaceVerificationService:
         ycrcb = cv2.cvtColor(face_roi, cv2.COLOR_BGR2YCrCb)
         cr = ycrcb[:, :, 1]
         cb = ycrcb[:, :, 2]
-        # Standard human dermal range under ambient light
-        skin_mask = (cr >= 130) & (cr <= 175) & (cb >= 75) & (cb <= 130)
+        # Standard human dermal range across natural skin variations under ambient light
+        skin_mask = (cr >= 115) & (cr <= 185) & (cb >= 65) & (cb <= 145)
         skin_ratio = np.mean(skin_mask)
         chroma_score = min(1.0, float(skin_ratio * 1.5))
+
 
         # 3. Specular Reflection Check (Screens produce blown-out white pixels with no saturation)
         hsv = cv2.cvtColor(face_roi, cv2.COLOR_BGR2HSV)
@@ -529,66 +537,44 @@ class FaceVerificationService:
         raw_ref = (face_tmpl.embedding_reference or "").strip()
         tmpl_data = {}
         enrolled_vector = None
-        fallback_vector = None
         model_version = None
 
         if raw_ref.startswith("{"):
             try:
                 tmpl_data = json.loads(raw_ref)
                 enrolled_vector = tmpl_data.get("vector")
-                fallback_vector = tmpl_data.get("fallback_vector")
                 model_version = tmpl_data.get("model_version")
             except Exception:
                 pass
-        elif raw_ref:
-            # Seed string templates (e.g. "enc_vec_512d_...")
-            enrolled_vector = live_vec
-            model_version = "seed_string"
 
-        if not enrolled_vector:
-            return False, 0.0, "Enrolled biometric template reference is invalid or corrupted. Please contact HR to re-enroll."
+        # 1. Require a valid enrolled biometric baseline vector (prevent mock/un-enrolled auto-pass)
+        if not enrolled_vector or not isinstance(enrolled_vector, list) or len(enrolled_vector) < 128:
+            return False, 0.0, (
+                "Your facial baseline template is in an un-enrolled or legacy seed format. "
+                "Please click 'Enroll Face' on your dashboard to complete your biometric camera enrollment."
+            )
 
-        app = get_insightface_app()
-        live_is_arcface = app is not None
+        # 2. Check vector dimension compatibility
+        if len(enrolled_vector) != len(live_vec):
+            return False, 0.0, (
+                "Your registered face template format is outdated. "
+                "Please re-enroll your face once on your dashboard to update your biometric template."
+            )
 
-        # 1. Direct ArcFace neural network comparison (InsightFace buffalo_s)
-        if live_is_arcface and model_version == "ArcFace-buffalo_s" and len(enrolled_vector) == len(live_vec):
-            raw_sim = FaceVerificationService.compute_similarity(live_vec, enrolled_vector)
-            threshold = settings.FACE_MATCH_THRESHOLD  # 0.38
+        # 3. Compute exact Biometric Cosine Similarity
+        raw_sim = FaceVerificationService.compute_similarity(live_vec, enrolled_vector)
+        threshold = getattr(settings, 'FACE_MATCH_THRESHOLD', 0.40)
 
-            if raw_sim >= threshold:
-                # Calibrated confidence for display (maps 0.38-0.70 to 80%-98%)
-                confidence = round(min(0.99, max(0.75, 0.45 + raw_sim * 0.80)), 4)
-                return True, confidence, f"Face verified successfully (Biometric Match: {confidence:.1%}, Liveness: {l_score:.2f})."
-            else:
-                return False, raw_sim, (
-                    f"Face verification mismatch: Biometric match confidence ({raw_sim:.1%}) "
-                    f"is below the required threshold ({threshold:.1%}). "
-                    f"Attendance can only be marked by the registered student."
-                )
+        # 4. Strict identity verification:
+        # Genuine student: raw_sim is typically 0.50 - 0.85 (>= 0.40).
+        # Other individuals / impostors: raw_sim is typically 0.00 - 0.25 (< 0.40).
+        if raw_sim >= threshold:
+            confidence = round(min(0.99, max(0.75, 0.42 + raw_sim * 0.70)), 4)
+            return True, confidence, f"Face verified successfully (Biometric Match: {confidence:.1%}, Liveness: {l_score:.2f})."
+        else:
+            return False, raw_sim, (
+                f"Face verification mismatch: Biometric match confidence ({raw_sim:.1%}) "
+                f"is below the required threshold ({threshold:.1%}). "
+                f"Attendance can only be marked by the registered student."
+            )
 
-        # 2. Direct Fallback comparison when native vectors match
-        if not live_is_arcface and model_version in ("Fallback-DCT-HOG", "v1.0", "v1.1") and len(enrolled_vector) == len(live_vec):
-            raw_sim = FaceVerificationService.compute_similarity(live_vec, enrolled_vector)
-            threshold = settings.FACE_MATCH_THRESHOLD  # 0.38
-            if raw_sim >= threshold:
-                confidence = round(min(0.99, max(0.75, 0.45 + raw_sim * 0.80)), 4)
-                return True, confidence, f"Face verified successfully (Biometric Match: {confidence:.1%}, Liveness: {l_score:.2f})."
-            elif raw_sim > 0.20:
-                confidence = round(float(min(0.985, 0.78 + 0.12 * l_score + 0.08 * q_score)), 4)
-                return True, confidence, f"Face verified successfully (Biometric Match: {confidence:.1%}, Liveness: {l_score:.2f})."
-
-        # 3. Cross-runtime / Cross-model adaptation (e.g. enrolled via InsightFace, but verified on Vercel, or legacy template)
-        # The live frame has passed strict single face presence, sharpness/exposure quality, and Fourier/chromatic liveness checks.
-        adaptive_score = round(float(min(0.985, 0.82 + 0.10 * l_score + 0.08 * q_score)), 4)
-
-        # Cache live fallback vector into the template for consistent future matching
-        try:
-            if raw_ref.startswith("{"):
-                tmpl_data["fallback_vector"] = live_vec
-                face_tmpl.embedding_reference = json.dumps(tmpl_data)
-                db.commit()
-        except Exception:
-            pass
-
-        return True, adaptive_score, f"Face verified successfully (Biometric Match: {adaptive_score:.1%}, Liveness: {l_score:.2f})."
