@@ -70,6 +70,7 @@ export const AttendancePunchModal: React.FC<AttendancePunchModalProps> = ({
   } | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -121,6 +122,8 @@ export const AttendancePunchModal: React.FC<AttendancePunchModalProps> = ({
         },
       });
 
+      mediaStreamRef.current = stream;
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.onloadedmetadata = () => {
@@ -136,9 +139,23 @@ export const AttendancePunchModal: React.FC<AttendancePunchModalProps> = ({
   };
 
   const stopCamera = () => {
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch {}
+      });
+      mediaStreamRef.current = null;
+    }
     if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach((track) => track.stop());
+      try {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach((track) => {
+          try {
+            track.stop();
+          } catch {}
+        });
+      } catch {}
       videoRef.current.srcObject = null;
     }
     setIsCameraActive(false);
@@ -292,6 +309,9 @@ export const AttendancePunchModal: React.FC<AttendancePunchModalProps> = ({
         '/attendance/punch',
         payload
       );
+
+      // Immediately shut off webcam tracks upon successful punch process completion
+      stopCamera();
 
       // Trigger success callback to update dashboard stats
       onSuccess();

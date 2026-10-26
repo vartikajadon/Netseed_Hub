@@ -34,6 +34,7 @@ export const FaceEnrollmentModal: React.FC<FaceEnrollmentModalProps> = ({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     if (isOpen && student) {
@@ -54,6 +55,7 @@ export const FaceEnrollmentModal: React.FC<FaceEnrollmentModalProps> = ({
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
         });
+        mediaStreamRef.current = stream;
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
         }
@@ -65,9 +67,23 @@ export const FaceEnrollmentModal: React.FC<FaceEnrollmentModalProps> = ({
 
   const stopCamera = () => {
     setIsCapturing(false);
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch {}
+      });
+      mediaStreamRef.current = null;
+    }
     if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach((track) => track.stop());
+      try {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach((track) => {
+          try {
+            track.stop();
+          } catch {}
+        });
+      } catch {}
       videoRef.current.srcObject = null;
     }
   };
@@ -133,6 +149,7 @@ export const FaceEnrollmentModal: React.FC<FaceEnrollmentModalProps> = ({
       });
 
       setSuccessMsg('Biometric ArcFace Centroid Baseline successfully enrolled and verified!');
+      stopCamera();
       onSuccess();
       setTimeout(() => {
         onClose();
