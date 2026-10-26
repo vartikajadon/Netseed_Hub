@@ -26,11 +26,32 @@ else:
         engine_kwargs["poolclass"] = NullPool
         connect_args["prepare_threshold"] = None
 
+if not (db_url.startswith("sqlite") or "pooler.supabase.com" in db_url or os.environ.get("VERCEL") == "1" or "AWS_LAMBDA_FUNCTION_NAME" in os.environ):
+    engine_kwargs.setdefault("pool_size", 10)
+    engine_kwargs.setdefault("max_overflow", 20)
+    engine_kwargs.setdefault("pool_recycle", 1800)
+
 engine = create_engine(
     db_url,
     connect_args=connect_args,
     **engine_kwargs
 )
+
+if db_url.startswith("sqlite"):
+    from sqlalchemy import event
+
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+            cursor.execute("PRAGMA cache_size=-64000")
+            cursor.execute("PRAGMA temp_store=MEMORY")
+        except Exception:
+            pass
+        finally:
+            cursor.close()
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()

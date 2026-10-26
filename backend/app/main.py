@@ -170,6 +170,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Compression Middleware: automatically gzip compress JSON payloads >= 500 bytes for lightning-fast network delivery
+from starlette.middleware.gzip import GZipMiddleware
+app.add_middleware(GZipMiddleware, minimum_size=500)
+
+
 # Exception handlers
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):

@@ -54,14 +54,55 @@ interface CacheEntry {
   timestamp: number;
 }
 
-// In-memory cache for ultra-fast instantaneous navigation & deduplication
+// In-memory & session cache for ultra-fast instantaneous navigation & deduplication
 const memoryCache = new Map<string, CacheEntry>();
 const inflightRequests = new Map<string, Promise<any>>();
 const DEFAULT_CACHE_TTL_MS = 60 * 1000; // 60 seconds default TTL
+const SESSION_CACHE_PREFIX = 'ns_c_';
+
+function getSessionCache<T>(key: string, ttl: number): T | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(`${SESSION_CACHE_PREFIX}${key}`);
+    if (!raw) return null;
+    const entry: CacheEntry = JSON.parse(raw);
+    if (Date.now() - entry.timestamp < ttl) {
+      return entry.data as T;
+    }
+  } catch {}
+  return null;
+}
+
+function setSessionCache(key: string, data: any) {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.setItem(`${SESSION_CACHE_PREFIX}${key}`, JSON.stringify({
+      data,
+      timestamp: Date.now(),
+    }));
+  } catch {}
+}
+
+function clearSessionCache(prefix?: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const k = sessionStorage.key(i);
+      if (k && k.startsWith(SESSION_CACHE_PREFIX)) {
+        if (!prefix || k.includes(prefix)) {
+          keysToRemove.push(k);
+        }
+      }
+    }
+    keysToRemove.forEach((k) => sessionStorage.removeItem(k));
+  } catch {}
+}
 
 export function clearApiCache(prefix?: string) {
   if (!prefix) {
     memoryCache.clear();
+    clearSessionCache();
     return;
   }
   for (const key of memoryCache.keys()) {
@@ -69,6 +110,7 @@ export function clearApiCache(prefix?: string) {
       memoryCache.delete(key);
     }
   }
+  clearSessionCache(prefix);
 }
 
 async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
@@ -82,18 +124,25 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   const cacheKey = `${token || 'anon'}:${cleanEndpoint}`;
 
-  // 1. In-memory Cache & In-flight Deduplication for GET requests
+  // 1. In-memory Cache, Session Cache & In-flight Deduplication for GET requests
   if (isGet && !bypassCache) {
-    const cached = memoryCache.get(cacheKey);
     const now = Date.now();
+    const cached = memoryCache.get(cacheKey);
     if (cached && now - cached.timestamp < cacheTtlMs) {
       return cached.data as T;
+    }
+
+    const sessionCached = getSessionCache<T>(cacheKey, cacheTtlMs);
+    if (sessionCached) {
+      memoryCache.set(cacheKey, { data: sessionCached, timestamp: now });
+      return sessionCached;
     }
 
     if (inflightRequests.has(cacheKey)) {
       return inflightRequests.get(cacheKey) as Promise<T>;
     }
   }
+
 
   const headers: HeadersInit = {
     ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
@@ -164,7 +213,9 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
         data: result,
         timestamp: Date.now(),
       });
+      setSessionCache(cacheKey, result);
     }
+
 
     return result as T;
   })();

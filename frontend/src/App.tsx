@@ -45,7 +45,27 @@ const StudentTrainerFeedback = lazy(() => import('./pages/StudentTrainerFeedback
 const StudentSkillsPage = lazy(() => import('./pages/StudentSkillsPage').then(m => ({ default: m.StudentSkillsPage })));
 const HRTrainerFeedback = lazy(() => import('./pages/HRTrainerFeedback').then(m => ({ default: m.HRTrainerFeedback })));
 
+// Eagerly prewarm critical route chunks in parallel with React hydration
+if (typeof window !== 'undefined') {
+  const token = localStorage.getItem('access_token');
+  if (!token) {
+    import('./pages/Login');
+  } else {
+    try {
+      const rawUser = localStorage.getItem('user_data');
+      if (rawUser) {
+        const parsed = JSON.parse(rawUser);
+        if (parsed.role === 'STUDENT') import('./pages/StudentDashboard');
+        else if (parsed.role === 'MENTOR') import('./pages/MentorDashboard');
+        else if (parsed.role === 'HR') import('./pages/HRDashboard');
+        else if (parsed.role === 'SUPER_ADMIN') import('./pages/AdminDashboard');
+      }
+    } catch {}
+  }
+}
+
 const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: string[] }> = ({ children, allowedRoles }) => {
+
   const { user, isAuthenticated, isLoading } = useAuth();
 
   if (isLoading && !user) {
