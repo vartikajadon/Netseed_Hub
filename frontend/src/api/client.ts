@@ -201,6 +201,12 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
         message = errorData.message;
       }
 
+      if (response.status === 403 && typeof message === 'string' && message.includes('ACCESS_REVOKED')) {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('access_revoked'));
+        }
+      }
+
       throw new ApiError(message, response.status, errorData);
     }
 

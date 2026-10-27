@@ -45,6 +45,16 @@ def apply_migrations():
             print("Adding 'installment_type' to students...")
             cursor.execute("ALTER TABLE students ADD COLUMN installment_type VARCHAR(50) DEFAULT 'ONE_TIME'")
 
+        # 3. Users table password management columns
+        cursor.execute("PRAGMA table_info(users)")
+        user_cols = [row[1] for row in cursor.fetchall()]
+        if "password_hash" not in user_cols:
+            print("Adding 'password_hash' to users...")
+            cursor.execute("ALTER TABLE users ADD COLUMN password_hash VARCHAR(255)")
+        if "must_change_password" not in user_cols:
+            print("Adding 'must_change_password' to users...")
+            cursor.execute("ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT 0")
+
         conn.commit()
         conn.close()
 

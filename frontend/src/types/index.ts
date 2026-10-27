@@ -8,6 +8,8 @@ export interface User {
   phone?: string | null;
   avatar_url?: string | null;
   is_active: boolean;
+  must_change_password?: boolean;
+  enrollment_status?: string | null;
   created_at: string;
   updated_at: string;
   last_login_at?: string | null;

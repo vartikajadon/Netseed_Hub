@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { NotificationProvider } from './context/NotificationContext';
+import { LocationProvider } from './context/LocationContext';
 import { Loading } from './components/Loading';
 
 // Code-split all pages to minimize initial bundle size and maximize loading speed
@@ -146,8 +147,9 @@ const RoutePreloader: React.FC = () => {
 export const App: React.FC = () => {
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <NotificationProvider>
+      <LocationProvider>
+        <AuthProvider>
+          <NotificationProvider>
           <BrowserRouter>
             <RoutePreloader />
             <Suspense fallback={<Loading fullScreen message="Loading page..." />}>
@@ -216,7 +218,8 @@ export const App: React.FC = () => {
             </Suspense>
           </BrowserRouter>
         </NotificationProvider>
-      </AuthProvider>
+        </AuthProvider>
+      </LocationProvider>
     </ThemeProvider>
   );
 };

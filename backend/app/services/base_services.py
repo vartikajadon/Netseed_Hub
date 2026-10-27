@@ -16,6 +16,7 @@ from app.schemas.all_schemas import (
     GeofenceCreate, GeofenceUpdate, StudentCreate, StudentUpdate, DeviceCreate,
     DeviceUpdate, ConsentCreate
 )
+from app.core.security import hash_password, DEFAULT_TEMPORARY_PASSWORD
 
 class UserService:
     def __init__(self, db: Session):
@@ -535,7 +536,9 @@ class StudentService:
                     full_name=target_name,
                     phone=data.contact_number,
                     role="STUDENT",
-                    is_active=True
+                    is_active=True,
+                    password_hash=hash_password(DEFAULT_TEMPORARY_PASSWORD),
+                    must_change_password=True
                 ))
             else:
                 if target_name and user.full_name != target_name:
@@ -834,6 +837,16 @@ class StudentService:
             student.dropout_marked_by = None
 
         student.enrollment_status = normalized_status
+
+        # Access Revocation: If student status is Dropout or Ended/Terminated, deactivate user account immediately
+        if student.user:
+            if normalized_status in ("DROPOUT", "DROPPED", "TERMINATED"):
+                student.user.is_active = False
+                self.user_repo.update(student.user)
+            elif normalized_status in ("ACTIVE", "ENROLLED") and not student.user.is_active:
+                student.user.is_active = True
+                self.user_repo.update(student.user)
+
         updated = self.repo.update(student)
 
         self.audit_repo.create(AuditLog(

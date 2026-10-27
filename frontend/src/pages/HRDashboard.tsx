@@ -39,7 +39,8 @@ import {
   ExternalLink,
   ShieldAlert,
   Sparkles,
-  Briefcase
+  Briefcase,
+  FileSpreadsheet
 } from 'lucide-react';
 
 export const HRDashboard: React.FC = () => {
@@ -562,6 +563,13 @@ export const HRDashboard: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2.5">
+            <Link
+              to="/hr/students?action=import"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-bold transition-all shadow-xs"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+              <span>Import Students Excel</span>
+            </Link>
             <Button
               variant="outline"
               size="sm"
@@ -580,6 +588,13 @@ export const HRDashboard: React.FC = () => {
           <span className="text-slate-500 dark:text-slate-400 font-semibold text-[11px] uppercase tracking-wider whitespace-nowrap">
             Quick Portals:
           </span>
+          <Link
+            to="/hr/students?action=import"
+            className="px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/80 font-bold whitespace-nowrap transition-colors border border-indigo-200 dark:border-indigo-800/60 flex items-center gap-1.5"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+            <span>Import Students Excel</span>
+          </Link>
           <Link
             to="/hr/students"
             className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 font-bold whitespace-nowrap transition-colors"

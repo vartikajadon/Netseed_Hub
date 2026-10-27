@@ -35,7 +35,10 @@ def get_current_user(
         user = user_repo.get_by_id(uid) or user_repo.get_by_email(uid)
         if user:
             if not user.is_active:
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is deactivated.")
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="ACCESS_REVOKED: Your account has been deactivated. Please contact your HR administrator."
+                )
             return user
 
     # Decode standard Supabase JWT
@@ -82,7 +85,7 @@ def get_current_user(
         if not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="User account is deactivated. Contact HR or Super Admin.",
+                detail="ACCESS_REVOKED: Your account has been deactivated. Contact HR or Super Admin.",
             )
 
         return user

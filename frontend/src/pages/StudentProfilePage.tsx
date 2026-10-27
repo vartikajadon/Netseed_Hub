@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { api } from '../api/client';
 import { Student, formatBatchType } from '../types';
 import { PhotoAdjusterModal } from '../components/PhotoAdjusterModal';
+import { ChangePasswordModal } from '../components/ChangePasswordModal';
 import {
   UserCheck,
   GraduationCap,
@@ -25,6 +26,8 @@ import {
   FileText,
   ExternalLink,
   Download,
+  KeyRound,
+  ShieldCheck,
 } from 'lucide-react';
 
 export const StudentProfilePage: React.FC = () => {
@@ -46,6 +49,9 @@ export const StudentProfilePage: React.FC = () => {
   const [isUploadingCv, setIsUploadingCv] = useState(false);
   const [cvSuccess, setCvSuccess] = useState<string | null>(null);
   const [cvError, setCvError] = useState<string | null>(null);
+
+  // Password management modal
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
 
   const fetchProfile = async () => {
     setIsLoading(true);
@@ -601,6 +607,50 @@ export const StudentProfilePage: React.FC = () => {
             </p>
           </div>
         </Card>
+
+        {/* Section 5: Account Security & Password Management */}
+        <Card
+          title="Account Security & Password"
+          subtitle="Manage your credentials and maintain account security"
+        >
+          <div className="p-4 sm:p-5 bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <div className="w-12 h-12 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 border border-indigo-500/20">
+                <KeyRound className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <h4 className="font-semibold text-slate-900 dark:text-slate-100 text-sm">
+                    Account Password
+                  </h4>
+                  <Badge variant="success">Active & Protected</Badge>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Password: <span className="font-mono tracking-widest text-slate-700 dark:text-slate-300">••••••••••••</span>
+                </p>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                  For your privacy and security, change your password periodically. If you ever forget it, contact HR to reset your credentials.
+                </p>
+              </div>
+            </div>
+
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() => setIsChangePasswordOpen(true)}
+              className="w-full md:w-auto justify-center"
+            >
+              <KeyRound className="w-3.5 h-3.5 mr-1.5" /> Change Password
+            </Button>
+          </div>
+        </Card>
+
+        {/* Change Password Modal */}
+        <ChangePasswordModal
+          isOpen={isChangePasswordOpen}
+          onClose={() => setIsChangePasswordOpen(false)}
+          requireCurrentPassword={true}
+        />
 
         {/* Photo Adjuster Modal */}
         <PhotoAdjusterModal

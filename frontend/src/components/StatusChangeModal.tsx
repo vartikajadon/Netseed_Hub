@@ -163,6 +163,15 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
           </div>
         )}
 
+        {(isDropout || selectedStatus === 'TERMINATED') && (
+          <div className="p-3 bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 rounded-xl text-xs flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <span>
+              <strong>Access Cutoff Policy:</strong> Changing status to Dropout or Terminated immediately ends all app access and invalidates login for this trainee. A notice will prompt them to contact HR if assistance is required.
+            </span>
+          </div>
+        )}
+
         <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-200 dark:border-slate-800">
           <Button type="button" variant="ghost" onClick={onClose} disabled={isLoading}>
             Cancel

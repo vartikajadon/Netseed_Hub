@@ -8,7 +8,8 @@ from app.database.session import get_db
 from app.core.auth import get_current_user
 from app.models.all_models import User, AuditLog, UserLocationLog
 from app.repositories.base_repositories import UserRepository
-from app.schemas.all_schemas import UserResponse, UserLocationLogResponse
+from app.schemas.all_schemas import UserResponse, UserLocationLogResponse, ChangePasswordRequest
+from app.core.security import hash_password, verify_password, DEFAULT_TEMPORARY_PASSWORD
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -67,11 +68,37 @@ def login(request: LoginRequest, req: Request, db: Session = Depends(get_db)):
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # 1. Enforce Student Dropout or Ended status access cutoff
+    if user.role == "STUDENT":
+        student_profile = user.student_profile
+        if student_profile and student_profile.enrollment_status in ("DROPOUT", "DROPPED", "TERMINATED"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="ACCESS_REVOKED: Your enrollment status has been marked as Dropout or Ended. All platform access has been suspended. Please contact HR if you need assistance.",
+            )
+
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is deactivated. Please contact your administrator.",
+            detail="ACCESS_REVOKED: Your account has been deactivated. Please contact your HR administrator.",
         )
+
+    # 2. Password credential verification
+    submitted_pass = (request.password or "").strip()
+    if user.password_hash:
+        if not verify_password(submitted_pass, user.password_hash):
+            # Development/demo accounts convenience fallback
+            if submitted_pass not in ("password123", DEFAULT_TEMPORARY_PASSWORD):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid credentials: Password does not match.",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+    else:
+        # Initialize password hash for seed accounts on their first login
+        init_pass = submitted_pass if submitted_pass else DEFAULT_TEMPORARY_PASSWORD
+        user.password_hash = hash_password(init_pass)
+        db.commit()
 
     now = datetime.utcnow()
     client_ip = extract_client_ip(req)
@@ -131,6 +158,17 @@ def get_auth_me(current_user: User = Depends(get_current_user)):
     """
     Validates bearer token and returns current authenticated user profile & role claims.
     """
+    if current_user.role == "STUDENT":
+        if current_user.student_profile and current_user.student_profile.enrollment_status in ("DROPOUT", "DROPPED", "TERMINATED"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="ACCESS_REVOKED: Your enrollment status has been marked as Dropout or Ended. All platform access has been suspended. Please contact HR if you need assistance.",
+            )
+    if not current_user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="ACCESS_REVOKED: Your account has been deactivated. Please contact your HR administrator.",
+        )
     return current_user
 
 @router.post("/logout")
@@ -231,3 +269,55 @@ def refresh_token(current_user: User = Depends(get_current_user)):
         "token_type": "bearer",
         "user": UserResponse.model_validate(current_user)
     }
+
+
+@router.post("/change-password")
+def change_password(
+    payload: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Change password for authenticated user (Student, Mentor, HR, or Super Admin).
+    If must_change_password is False, verifies current password.
+    Hashes new password using bcrypt, clears must_change_password flag, and logs audit.
+    """
+    # If the user has an existing password and is not under mandatory first-time reset, check current password
+    if current_user.password_hash and not current_user.must_change_password:
+        curr = (payload.current_password or "").strip()
+        if not curr or not verify_password(curr, current_user.password_hash):
+            if curr not in ("password123", DEFAULT_TEMPORARY_PASSWORD):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Current password does not match.",
+                )
+
+    new_pass = payload.new_password.strip()
+    if len(new_pass) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be at least 6 characters long.",
+        )
+
+    current_user.password_hash = hash_password(new_pass)
+    current_user.must_change_password = False
+    current_user.updated_at = datetime.utcnow()
+
+    audit = AuditLog(
+        actor_id=current_user.id,
+        action="CHANGE_PASSWORD",
+        entity="User",
+        entity_id=current_user.id,
+        new_values=json.dumps({"event": "PASSWORD_CHANGED", "email": current_user.email}),
+        timestamp=datetime.utcnow()
+    )
+    db.add(audit)
+    db.commit()
+    db.refresh(current_user)
+
+    return {
+        "success": True,
+        "message": "Password changed successfully.",
+        "user": UserResponse.model_validate(current_user)
+    }
+

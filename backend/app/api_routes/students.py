@@ -1,15 +1,20 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, status, HTTPException, Query
-from pydantic import BaseModel
+import io
+import csv
+import json
+from datetime import datetime, date
+from fastapi import APIRouter, Depends, status, HTTPException, Query, UploadFile, File, Form
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.core.auth import get_current_user
 from app.core.permissions import require_staff, require_hr, verify_student_access, require_role
-from app.models.all_models import User, Student
+from app.models.all_models import User, Student, Program, Batch, AuditLog
 from app.schemas.all_schemas import (
     StudentResponse, StudentCreate, StudentUpdate, MentorAssignmentPayload,
-    StudentStatusPayload, PaginatedStudentList
+    StudentStatusPayload, PaginatedStudentList, AdminResetPasswordRequest
 )
+from app.core.security import hash_password, DEFAULT_TEMPORARY_PASSWORD
 from app.services.base_services import StudentService
 
 router = APIRouter(prefix="/students", tags=["Students"])
@@ -160,6 +165,56 @@ def delete_student(
     return service.delete_student(student_id, actor_id=current_user.id)
 
 
+@router.post("/{student_id}/reset-password", summary="HR / Super Admin Reset Student Password")
+def reset_student_password(
+    student_id: str,
+    payload: Optional[AdminResetPasswordRequest] = None,
+    current_user: User = Depends(require_hr),
+    db: Session = Depends(get_db)
+):
+    """
+    HR / Super Admin resets a student's password to a temporary password and flags must_change_password=True.
+    When the student logs in next, they will be required to create their own new password.
+    """
+    student = db.query(Student).filter(Student.id == student_id).first()
+    if not student:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found.")
+
+    user = student.user
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User account associated with student not found.")
+
+    temp_pass = (payload.new_password if payload and payload.new_password else DEFAULT_TEMPORARY_PASSWORD).strip()
+    if len(temp_pass) < 6:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Temporary password must be at least 6 characters.")
+
+    user.password_hash = hash_password(temp_pass)
+    user.must_change_password = True
+    user.updated_at = datetime.utcnow()
+
+    # Log audit trail
+    audit = AuditLog(
+        actor_id=current_user.id,
+        action="RESET_STUDENT_PASSWORD",
+        entity="Student",
+        entity_id=student.id,
+        new_values=json.dumps({"event": "HR_RESET_PASSWORD", "student_roll": student.roll_number, "email": user.email}),
+        timestamp=datetime.utcnow()
+    )
+    db.add(audit)
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "success": True,
+        "message": f"Password reset successfully for student {user.full_name} ({student.roll_number}).",
+        "temporary_password": temp_pass,
+        "student_roll": student.roll_number,
+        "email": user.email
+    }
+
+
+
 class CVUploadRequest(BaseModel):
     cv_url: str
     cv_file_name: Optional[str] = "Student_Resume.pdf"
@@ -273,3 +328,369 @@ def release_student_certificate(
             )
 
     return student
+
+
+class StudentImportRow(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    roll_number: str
+    full_name: str
+    email: str
+    contact_number: Optional[str] = None
+    program: Optional[str] = None
+    batch: Optional[str] = None
+    batch_type: Optional[str] = "TECH_MASTER"
+    enrollment_status: Optional[str] = None
+    total_fees: Optional[float] = None
+    payment_mode: Optional[str] = "ONLINE"
+    installment_type: Optional[str] = "ONE_TIME"
+    college_name: Optional[str] = None
+    qualification: Optional[str] = None
+    domicile: Optional[str] = None
+    dob: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    passout_year: Optional[int] = None
+    guardian_name: Optional[str] = None
+    address: Optional[str] = None
+
+
+class BulkStudentImportPayload(BaseModel):
+    students: List[StudentImportRow]
+    default_enrollment_status: Optional[str] = None  # e.g. "ACTIVE" for current, "COMPLETED" for previous
+
+
+class ImportStudentsResponse(BaseModel):
+    success: bool
+    message: str
+    total_processed: int
+    created_count: int
+    updated_count: int
+    errors: List[str] = []
+
+
+def _parse_excel_date(val) -> Optional[date]:
+    if not val:
+        return None
+    if isinstance(val, date):
+        return val
+    if isinstance(val, datetime):
+        return val.date()
+    val_str = str(val).strip()
+    if not val_str:
+        return None
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(val_str, fmt).date()
+        except ValueError:
+            pass
+    return None
+
+
+def _normalize_batch_type(raw_val: Optional[str]) -> str:
+    if not raw_val:
+        return "TECH_MASTER"
+    val = str(raw_val).strip().upper()
+    if "SHORT" in val:
+        return "SHORT_DURATION"
+    if "INTERN" in val:
+        return "INTERNSHIP"
+    return "TECH_MASTER"
+
+
+def _normalize_status(raw_val: Optional[str], default_status: Optional[str] = None) -> str:
+    val = (raw_val or default_status or "ACTIVE").strip().upper()
+    if val in ("CURRENT", "IN_PROGRESS", "ONGOING"):
+        return "ACTIVE"
+    if val in ("PREVIOUS", "ALUMNI", "PASSED", "COMPLETED", "PASS_OUT"):
+        return "COMPLETED"
+    if val in ("DROPPED", "DROPOUT"):
+        return "DROPPED"
+    if val in ("TERMINATED", "DISMISSED"):
+        return "TERMINATED"
+    if val in ("ON_LEAVE", "LEAVE"):
+        return "ON_LEAVE"
+    if val in ("ENROLLED", "REGISTERED"):
+        return "ENROLLED"
+    return "ACTIVE"
+
+
+def _process_student_rows(
+    rows: List[dict],
+    default_status: Optional[str],
+    actor_id: str,
+    db: Session
+) -> ImportStudentsResponse:
+    created = 0
+    updated = 0
+    errors = []
+
+    # Cache programs and batches for quick lookup
+    all_programs = db.query(Program).all()
+    all_batches = db.query(Batch).all()
+
+    for idx, r in enumerate(rows, start=1):
+        try:
+            roll = str(r.get("roll_number") or "").strip()
+            name = str(r.get("full_name") or "").strip()
+            email = str(r.get("email") or "").strip().lower()
+
+            if not roll or not name or not email:
+                errors.append(f"Row #{idx}: Missing required fields (Roll Number, Full Name, or Email).")
+                continue
+
+            phone = str(r.get("contact_number") or "").strip() or None
+
+            # 1. Resolve or create user
+            user = db.query(User).filter(User.email == email).first()
+            if not user:
+                user = User(
+                    email=email,
+                    full_name=name,
+                    phone=phone,
+                    role="STUDENT",
+                    is_active=True,
+                )
+                db.add(user)
+                db.flush()
+            else:
+                if name and user.full_name != name:
+                    user.full_name = name
+                if phone and user.phone != phone:
+                    user.phone = phone
+                if user.role != "STUDENT":
+                    user.role = "STUDENT"
+                db.flush()
+
+            # 2. Resolve Program
+            program_id = None
+            prog_term = str(r.get("program") or "").strip().lower()
+            if prog_term:
+                matched_p = next(
+                    (p for p in all_programs if p.id == prog_term or p.code.lower() == prog_term or prog_term in p.title.lower()),
+                    None
+                )
+                if matched_p:
+                    program_id = matched_p.id
+
+            # 3. Resolve Batch
+            batch_id = None
+            batch_term = str(r.get("batch") or "").strip().lower()
+            if batch_term:
+                matched_b = next(
+                    (b for b in all_batches if b.id == batch_term or batch_term in b.name.lower()),
+                    None
+                )
+                if matched_b:
+                    batch_id = matched_b.id
+                    if not program_id and matched_b.program_id:
+                        program_id = matched_b.program_id
+
+            # 4. Resolve Batch Type & Enrollment Status
+            batch_type = _normalize_batch_type(r.get("batch_type"))
+            enrollment_status = _normalize_status(r.get("enrollment_status"), default_status)
+
+            # 5. Financial & Profile fields
+            total_fees = None
+            if r.get("total_fees") is not None and str(r.get("total_fees")).strip():
+                try:
+                    total_fees = float(str(r.get("total_fees")).replace(",", "").strip())
+                except ValueError:
+                    total_fees = None
+
+            payment_mode = (str(r.get("payment_mode") or "ONLINE").strip().upper())
+            installment_type = (str(r.get("installment_type") or "ONE_TIME").strip().upper())
+            if installment_type not in ("ONE_TIME", "TWO_INSTALLMENTS"):
+                installment_type = "ONE_TIME"
+
+            college_name = str(r.get("college_name") or "").strip() or None
+            qualification = str(r.get("qualification") or "").strip() or None
+            domicile = str(r.get("domicile") or "").strip() or None
+            guardian_name = str(r.get("guardian_name") or "").strip() or None
+            address = str(r.get("address") or "").strip() or None
+
+            passout_year = None
+            if r.get("passout_year"):
+                try:
+                    passout_year = int(float(str(r.get("passout_year")).strip()))
+                except ValueError:
+                    passout_year = None
+
+            dob = _parse_excel_date(r.get("dob"))
+            start_date = _parse_excel_date(r.get("start_date"))
+            end_date = _parse_excel_date(r.get("end_date"))
+
+            # 6. Check existing student record by roll_number or user_id
+            student = db.query(Student).filter(
+                (Student.roll_number == roll) | (Student.user_id == user.id)
+            ).first()
+
+            if student:
+                # Update existing student
+                student.roll_number = roll
+                student.user_id = user.id
+                if program_id:
+                    student.program_id = program_id
+                if batch_id:
+                    student.batch_id = batch_id
+                student.batch_type = batch_type
+                student.enrollment_status = enrollment_status
+                if total_fees is not None:
+                    student.total_fees = total_fees
+                student.payment_mode = payment_mode
+                student.installment_type = installment_type
+                if college_name:
+                    student.college_name = college_name
+                if qualification:
+                    student.qualification = qualification
+                if domicile:
+                    student.domicile = domicile
+                if guardian_name:
+                    student.guardian_name = guardian_name
+                if address:
+                    student.address = address
+                if passout_year:
+                    student.passout_year = passout_year
+                if dob:
+                    student.dob = dob
+                if start_date:
+                    student.start_date = start_date
+                if end_date:
+                    student.end_date = end_date
+                student.updated_at = datetime.utcnow()
+                updated += 1
+            else:
+                # Create brand new student
+                new_student = Student(
+                    user_id=user.id,
+                    roll_number=roll,
+                    program_id=program_id,
+                    batch_id=batch_id,
+                    batch_type=batch_type,
+                    enrollment_status=enrollment_status,
+                    total_fees=total_fees or 0.0,
+                    payment_mode=payment_mode,
+                    installment_type=installment_type,
+                    college_name=college_name,
+                    qualification=qualification,
+                    domicile=domicile,
+                    guardian_name=guardian_name,
+                    address=address,
+                    passout_year=passout_year,
+                    dob=dob,
+                    start_date=start_date or date.today(),
+                    end_date=end_date,
+                    created_at=datetime.utcnow(),
+                    updated_at=datetime.utcnow(),
+                )
+                db.add(new_student)
+                created += 1
+
+        except Exception as ex:
+            errors.append(f"Row #{idx}: {str(ex)}")
+
+    db.add(AuditLog(
+        actor_id=actor_id,
+        action="BULK_STUDENT_IMPORT",
+        entity="Student",
+        entity_id=None,
+        new_values=json.dumps({
+            "total_processed": len(rows),
+            "created": created,
+            "updated": updated,
+            "errors_count": len(errors)
+        }),
+        timestamp=datetime.utcnow()
+    ))
+
+    db.commit()
+
+    return ImportStudentsResponse(
+        success=True,
+        message=f"Successfully imported {created + updated} student record(s) ({created} created, {updated} updated).",
+        total_processed=len(rows),
+        created_count=created,
+        updated_count=updated,
+        errors=errors
+    )
+
+
+@router.post("/import-bulk", response_model=ImportStudentsResponse, summary="Import multiple students via JSON payload")
+def import_students_bulk(
+    payload: BulkStudentImportPayload,
+    current_user: User = Depends(require_hr),
+    db: Session = Depends(get_db)
+):
+    """
+    Bulk import student roster entries for either currently enrolled or previous alumni students.
+    Validates and upserts user and student profiles. HR and SUPER_ADMIN only.
+    """
+    rows = [s.model_dump() for s in payload.students]
+    return _process_student_rows(
+        rows=rows,
+        default_status=payload.default_enrollment_status,
+        actor_id=current_user.id,
+        db=db
+    )
+
+
+@router.post("/import-excel", response_model=ImportStudentsResponse, summary="Import students directly from Excel (.xlsx/.xls) or CSV")
+async def import_students_excel(
+    file: UploadFile = File(...),
+    default_status: Optional[str] = Form(None),
+    current_user: User = Depends(require_hr),
+    db: Session = Depends(get_db)
+):
+    """
+    Upload and parse an Excel spreadsheet (.xlsx, .xls) or CSV file containing student records.
+    Supports both currently enrolled (ACTIVE/ENROLLED) and previous (COMPLETED/ALUMNI/DROPPED) students.
+    """
+    filename = file.filename.lower()
+    contents = await file.read()
+
+    rows: List[dict] = []
+
+    if filename.endswith(".csv"):
+        text = contents.decode("utf-8", errors="replace")
+        reader = csv.DictReader(io.StringIO(text))
+        for row in reader:
+            normalized_row = {
+                k.strip().lower().replace(" ", "_"): v
+                for k, v in row.items() if k
+            }
+            rows.append(normalized_row)
+    elif filename.endswith(".xlsx") or filename.endswith(".xls"):
+        import openpyxl
+        wb = openpyxl.load_workbook(io.BytesIO(contents), data_only=True)
+        sheet = wb.active
+        headers = []
+        for cell in sheet[1]:
+            header_val = str(cell.value or "").strip().lower().replace(" ", "_")
+            headers.append(header_val)
+
+        for row_cells in sheet.iter_rows(min_row=2, values_only=True):
+            if not any(row_cells):
+                continue
+            row_dict = {}
+            for col_idx, cell_value in enumerate(row_cells):
+                if col_idx < len(headers) and headers[col_idx]:
+                    row_dict[headers[col_idx]] = cell_value
+            rows.append(row_dict)
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported file format. Please upload an Excel (.xlsx, .xls) or CSV file."
+        )
+
+    if not rows:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The uploaded spreadsheet contains no data rows."
+        )
+
+    return _process_student_rows(
+        rows=rows,
+        default_status=default_status,
+        actor_id=current_user.id,
+        db=db
+    )
+

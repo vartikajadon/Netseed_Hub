@@ -555,21 +555,32 @@ export const AttendancePunchModal: React.FC<AttendancePunchModalProps> = ({
               <span className="text-slate-700 dark:text-slate-300 flex items-center gap-1.5 font-semibold">
                 <MapPin className="w-4 h-4 text-rose-500 shrink-0" /> Office Geofence:
               </span>
-              {distanceMeters !== null ? (
-                <span
-                  className={`font-mono font-bold text-xs px-2 py-0.5 rounded-md ${
-                    distanceMeters <= CAMPUS_ALLOWED_RADIUS_METERS
-                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30'
-                      : 'bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/30'
-                  }`}
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={requestGeolocation}
+                  className="px-2 py-0.5 rounded-md bg-sky-100 hover:bg-sky-200 dark:bg-sky-900/50 dark:hover:bg-sky-800 text-sky-800 dark:text-sky-300 font-bold text-[10px] inline-flex items-center gap-1 transition-colors"
+                  title="Explicitly re-request GPS location from browser"
                 >
-                  {distanceMeters <= CAMPUS_ALLOWED_RADIUS_METERS
-                    ? `Inside Campus (${distanceMeters.toFixed(1)}m)`
-                    : `Outside Campus (${distanceMeters.toFixed(1)}m)`}
-                </span>
-              ) : (
-                <span className="text-slate-500 dark:text-slate-400 font-medium">Checking GPS...</span>
-              )}
+                  <Navigation className="w-2.5 h-2.5" />
+                  <span>Refresh GPS</span>
+                </button>
+                {distanceMeters !== null ? (
+                  <span
+                    className={`font-mono font-bold text-xs px-2 py-0.5 rounded-md ${
+                      distanceMeters <= CAMPUS_ALLOWED_RADIUS_METERS
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30'
+                        : 'bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/30'
+                    }`}
+                  >
+                    {distanceMeters <= CAMPUS_ALLOWED_RADIUS_METERS
+                      ? `Inside Campus (${distanceMeters.toFixed(1)}m)`
+                      : `Outside Campus (${distanceMeters.toFixed(1)}m)`}
+                  </span>
+                ) : (
+                  <span className="text-slate-500 dark:text-slate-400 font-medium">Checking GPS...</span>
+                )}
+              </div>
             </div>
 
             {location && (

@@ -7,6 +7,10 @@ import { Button } from './Button';
 import { Modal } from './Modal';
 import { NotificationCenter } from './NotificationCenter';
 import { NotificationToastContainer } from './NotificationToast';
+import { LocationAccessPrompt } from './LocationAccessPrompt';
+import { UserProfileDropdown } from './UserProfileDropdown';
+import { FirstLoginPasswordModal } from './FirstLoginPasswordModal';
+import { AccessSuspendedModal } from './AccessSuspendedModal';
 import {
   Shield, LogOut, Sun, Moon, Menu, X, ChevronLeft, ChevronRight,
   LayoutDashboard, Users, BookOpen, Layers, Clock, BarChart3,
@@ -186,6 +190,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
         {/* Header Right Actions */}
         <div className="flex items-center gap-1.5 sm:gap-3">
+          {/* Explicit Location Status Pill */}
+          <LocationAccessPrompt variant="pill" className="hidden sm:inline-flex" />
+
           <button
             onClick={toggleTheme}
             className="p-1.5 sm:p-2 min-h-[38px] min-w-[38px] rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-indigo-600 border border-slate-300 dark:bg-slate-800/60 dark:hover:bg-slate-800 dark:text-slate-300 dark:hover:text-amber-400 dark:border-slate-700/60 transition-all flex items-center justify-center gap-1.5 text-xs font-semibold"
@@ -209,22 +216,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           <NotificationCenter />
 
           {user ? (
-            <div className="flex items-center gap-2 sm:gap-4">
-              <div className="hidden sm:block text-xs text-right">
-                <div className="text-slate-900 dark:text-slate-100 font-bold leading-tight truncate max-w-[150px]">{user.full_name}</div>
-                <div className="text-slate-500 dark:text-slate-400 font-medium truncate max-w-[150px]">{user.email}</div>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowLogoutConfirm(true)}
-                className="text-slate-600 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400 px-2 sm:px-3 min-h-[38px] flex items-center"
-                title="Sign Out"
-              >
-                <LogOut className="w-4 h-4 sm:mr-1.5" />
-                <span className="hidden sm:inline">Logout</span>
-              </Button>
-            </div>
+            <UserProfileDropdown onLogoutClick={() => setShowLogoutConfirm(true)} />
           ) : (
             <Link to="/login">
               <Button variant="primary" size="sm">Login</Button>
@@ -390,6 +382,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         {/* Content Wrapper */}
         <div className="flex-1 min-w-0 flex flex-col min-h-[calc(100vh-57px)]">
           <main className={`flex-1 p-3 sm:p-5 md:p-8 max-w-7xl w-full mx-auto overflow-x-hidden ${role === 'STUDENT' ? 'pb-24 md:pb-8' : 'pb-8'}`}>
+            {/* Global Explicit Location Access Notice (When not yet granted) */}
+            <LocationAccessPrompt variant="banner" className="mb-4" />
             {children}
           </main>
 
@@ -466,6 +460,12 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
       {/* Global Toast Alert Notifications */}
       <NotificationToastContainer />
+
+      {/* Mandatory Password Change for First-Time Student Logins */}
+      <FirstLoginPasswordModal />
+
+      {/* Access Revocation Banner if Student Dropout or Ended */}
+      <AccessSuspendedModal />
     </div>
   );
 };

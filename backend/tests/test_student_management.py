@@ -335,3 +335,134 @@ def test_mentor_and_student_cannot_mark_dropout(client):
     res_s = client.patch("/api/v1/students/std-rec-01/status", json=payload, headers=STUDENT1_HEADERS)
     assert res_s.status_code == 403
 
+
+def test_hr_bulk_import_current_and_previous_students(client):
+    """Test importing both currently enrolled and previous (alumni) students via bulk JSON endpoint."""
+    payload = {
+        "students": [
+            {
+                "roll_number": "NL-IMPORT-CURR-01",
+                "full_name": "Active Learner",
+                "email": "active.learner@netlink.org",
+                "contact_number": "+919876543210",
+                "program": "Full Stack Development",
+                "batch_type": "TECH_MASTER",
+                "enrollment_status": "ACTIVE",
+                "total_fees": 35000.0,
+                "college_name": "RGPV Bhopal",
+                "qualification": "B.Tech CSE"
+            },
+            {
+                "roll_number": "NL-IMPORT-PREV-01",
+                "full_name": "Previous Alumni",
+                "email": "previous.alumni@netlink.org",
+                "contact_number": "+919876543211",
+                "program": "Full Stack Development",
+                "batch_type": "SHORT_DURATION",
+                "enrollment_status": "COMPLETED",
+                "total_fees": 20000.0,
+                "passout_year": 2024,
+                "college_name": "MANIT Bhopal"
+            }
+        ]
+    }
+    res = client.post("/api/v1/students/import-bulk", json=payload, headers=HR_HEADERS)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["success"] is True
+    assert data["total_processed"] == 2
+    assert data["created_count"] == 2
+    assert len(data["errors"]) == 0
+
+    # Verify both students exist with correct status in roster
+    active_res = client.get("/api/v1/students?search=NL-IMPORT-CURR-01", headers=HR_HEADERS)
+    assert active_res.status_code == 200
+    active_items = active_res.json()["items"]
+    assert len(active_items) == 1
+    assert active_items[0]["enrollment_status"] == "ACTIVE"
+    assert active_items[0]["user"]["full_name"] == "Active Learner"
+
+    prev_res = client.get("/api/v1/students?search=NL-IMPORT-PREV-01", headers=HR_HEADERS)
+    assert prev_res.status_code == 200
+    prev_items = prev_res.json()["items"]
+    assert len(prev_items) == 1
+    assert prev_items[0]["enrollment_status"] == "COMPLETED"
+    assert prev_items[0]["user"]["full_name"] == "Previous Alumni"
+
+
+def test_hr_excel_import_file_upload(client):
+    """Test importing students via direct CSV/Excel file upload."""
+    import io
+    csv_content = (
+        "roll_number,full_name,email,contact_number,enrollment_status,batch_type,total_fees\n"
+        "NL-CSV-01,CSV Trainee One,csv.trainee1@netlink.org,9999888811,ACTIVE,TECH_MASTER,30000\n"
+        "NL-CSV-02,CSV Alumni Two,csv.alumni2@netlink.org,9999888822,COMPLETED,INTERNSHIP,15000\n"
+    )
+    files = {"file": ("students.csv", io.BytesIO(csv_content.encode("utf-8")), "text/csv")}
+    res = client.post("/api/v1/students/import-excel", files=files, headers=HR_HEADERS)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["success"] is True
+    assert data["total_processed"] == 2
+    assert data["created_count"] == 2
+
+
+def test_password_management_flow_and_hr_reset(client):
+    """Test user password change, HR reset password, and must_change_password flag."""
+    # 1. Student changes their password
+    change_payload = {
+        "current_password": "password123",
+        "new_password": "MyNewSecurePassword!2026"
+    }
+    change_res = client.post("/api/v1/auth/change-password", json=change_payload, headers=STUDENT1_HEADERS)
+    assert change_res.status_code == 200, change_res.text
+    data = change_res.json()
+    assert data["user"]["must_change_password"] is False
+
+    # 2. Student logs in with the new password
+    login_res = client.post("/api/v1/auth/login", json={
+        "email": "student1@netlink.org",
+        "password": "MyNewSecurePassword!2026"
+    })
+    assert login_res.status_code == 200
+    assert login_res.json()["user"]["must_change_password"] is False
+
+    # 3. HR resets student's password
+    reset_res = client.post("/api/v1/students/std-rec-01/reset-password", json={
+        "new_password": "Welcome@2026"
+    }, headers=HR_HEADERS)
+    assert reset_res.status_code == 200
+    assert reset_res.json()["temporary_password"] == "Welcome@2026"
+
+    # 4. Student logs in with temporary password and has must_change_password == True
+    temp_login_res = client.post("/api/v1/auth/login", json={
+        "email": "student1@netlink.org",
+        "password": "Welcome@2026"
+    })
+    assert temp_login_res.status_code == 200
+    assert temp_login_res.json()["user"]["must_change_password"] is True
+
+
+def test_dropout_access_revocation_on_login_and_me(client):
+    """Test that setting a student status to DROPOUT immediately cuts off their platform access."""
+    # 1. Update student status to DROPOUT
+    patch_res = client.patch("/api/v1/students/std-rec-01/status", json={
+        "status": "DROPOUT",
+        "reason": "Switched to data analytics program"
+    }, headers=HR_HEADERS)
+    assert patch_res.status_code == 200
+
+    # 2. Attempt login as dropped out student -> HTTP 403 ACCESS_REVOKED
+    login_res = client.post("/api/v1/auth/login", json={
+        "email": "student1@netlink.org",
+        "password": "password123"
+    })
+    assert login_res.status_code == 403
+    assert "ACCESS_REVOKED" in login_res.json()["detail"]
+
+    # 3. Attempt /auth/me with existing token -> HTTP 403 ACCESS_REVOKED
+    me_res = client.get("/api/v1/auth/me", headers=STUDENT1_HEADERS)
+    assert me_res.status_code == 403
+    assert "ACCESS_REVOKED" in me_res.json()["detail"]
+
+

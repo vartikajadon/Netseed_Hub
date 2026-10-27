@@ -17,6 +17,8 @@ class User(Base):
     phone = Column(String(20), nullable=True)
     avatar_url = Column(Text, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
+    password_hash = Column(String(255), nullable=True)
+    must_change_password = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     last_login_at = Column(DateTime, nullable=True)
@@ -33,6 +35,12 @@ class User(Base):
     face_template = relationship("FaceTemplate", back_populates="user", uselist=False, foreign_keys="[FaceTemplate.user_id]", cascade="all, delete-orphan")
     audit_logs = relationship("AuditLog", back_populates="actor", foreign_keys="[AuditLog.actor_id]")
     location_logs = relationship("UserLocationLog", back_populates="user", cascade="all, delete-orphan", foreign_keys="[UserLocationLog.user_id]")
+
+    @property
+    def enrollment_status(self):
+        if self.student_profile:
+            return self.student_profile.enrollment_status
+        return None
 
 
 class Geofence(Base):

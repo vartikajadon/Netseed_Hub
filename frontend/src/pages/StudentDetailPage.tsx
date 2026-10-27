@@ -9,6 +9,7 @@ import { ErrorMessage } from '../components/ErrorMessage';
 import { MentorSelectorModal } from '../components/MentorSelectorModal';
 import { StatusChangeModal } from '../components/StatusChangeModal';
 import { StudentAttendanceCalendarModal } from '../components/StudentAttendanceCalendarModal';
+import { StudentPasswordResetModal } from '../components/StudentPasswordResetModal';
 import { Modal } from '../components/Modal';
 import { FaceEnrollmentModal } from '../components/FaceEnrollmentModal';
 import { api } from '../api/client';
@@ -23,6 +24,7 @@ import {
   Trash2,
   Camera,
   Upload,
+  KeyRound,
   AlertCircle,
   CheckCircle2,
   Save,
@@ -42,6 +44,7 @@ export const StudentDetailPage: React.FC = () => {
   const [isAssigningMentor, setIsAssigningMentor] = useState(false);
   const [isChangingStatus, setIsChangingStatus] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
   const [isFaceEnrollOpen, setIsFaceEnrollOpen] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -253,6 +256,9 @@ export const StudentDetailPage: React.FC = () => {
             </Button>
             <Button size="sm" variant="primary" onClick={() => setIsChangingStatus(true)}>
               <RefreshCw className="w-3.5 h-3.5 mr-1" /> Change Status
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setIsResetPasswordOpen(true)}>
+              <KeyRound className="w-3.5 h-3.5 mr-1 text-amber-600 dark:text-amber-400" /> Reset Password
             </Button>
             <Button
               size="sm"
@@ -720,6 +726,14 @@ export const StudentDetailPage: React.FC = () => {
             fetchDetails();
           }}
           student={student}
+        />
+
+        {/* Student Password Reset Modal */}
+        <StudentPasswordResetModal
+          isOpen={isResetPasswordOpen}
+          onClose={() => setIsResetPasswordOpen(false)}
+          student={student}
+          onSuccess={fetchDetails}
         />
       </div>
     </Layout>

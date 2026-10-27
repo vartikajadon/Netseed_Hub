@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams, Link } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { Card } from '../components/Card';
 import { Table, Column } from '../components/Table';
@@ -11,12 +12,13 @@ import { StudentForm } from '../components/StudentForm';
 import { MentorSelectorModal } from '../components/MentorSelectorModal';
 import { StatusChangeModal } from '../components/StatusChangeModal';
 import { StudentAttendanceCalendarModal } from '../components/StudentAttendanceCalendarModal';
+import { StudentExcelImportModal } from '../components/StudentExcelImportModal';
+import { StudentPasswordResetModal } from '../components/StudentPasswordResetModal';
 import { Modal } from '../components/Modal';
 import { FaceEnrollmentModal } from '../components/FaceEnrollmentModal';
 import { api } from '../api/client';
 import { Student, Program, Batch, User, PaginatedStudentList, formatBatchType, BATCH_TYPE_OPTIONS } from '../types';
-import { Users, UserPlus, Search, Filter, Eye, Edit, UserCheck, RefreshCw, Trash2, Calendar, Camera } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Users, UserPlus, Search, Filter, Eye, Edit, UserCheck, RefreshCw, Trash2, Calendar, Camera, FileSpreadsheet, KeyRound } from 'lucide-react';
 
 export const HRStudentManagement: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
@@ -38,16 +40,24 @@ export const HRStudentManagement: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Modals state
+  const [searchParams] = useSearchParams();
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [assigningMentorStudent, setAssigningMentorStudent] = useState<Student | null>(null);
   const [changingStatusStudent, setChangingStatusStudent] = useState<Student | null>(null);
   const [viewingCalendarStudent, setViewingCalendarStudent] = useState<Student | null>(null);
+  const [resettingPasswordStudent, setResettingPasswordStudent] = useState<Student | null>(null);
   const [removingStudent, setRemovingStudent] = useState<Student | null>(null);
   const [enrollingFaceStudent, setEnrollingFaceStudent] = useState<Student | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (searchParams.get('action') === 'import') {
+      setIsImportModalOpen(true);
+    }
+  }, [searchParams]);
 
   const fetchFilters = async () => {
     try {
@@ -246,6 +256,14 @@ export const HRStudentManagement: React.FC = () => {
           </button>
           <button
             type="button"
+            title="Reset Student Password"
+            onClick={() => setResettingPasswordStudent(s)}
+            className="w-7 h-7 inline-flex items-center justify-center rounded-lg border border-amber-200 dark:border-amber-800/60 bg-amber-50/70 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/60 shadow-2xs hover:scale-105 active:scale-95 transition-all"
+          >
+            <KeyRound className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
             title="Remove Student"
             onClick={() => {
               setDeleteError(null);
@@ -273,16 +291,26 @@ export const HRStudentManagement: React.FC = () => {
               Register trainees, assign mentors, manage status, and query enrolled student profiles.
             </p>
           </div>
-          <Button
-            variant="primary"
-            onClick={() => {
-              setEditingStudent(null);
-              setIsFormOpen(true);
-            }}
-          >
-            <UserPlus className="w-4 h-4 mr-2" />
-            Register Student
-          </Button>
+          <div className="flex items-center gap-2.5">
+            <Button
+              variant="secondary"
+              onClick={() => setIsImportModalOpen(true)}
+              className="font-bold border-indigo-200 dark:border-indigo-850 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 shadow-xs"
+            >
+              <FileSpreadsheet className="w-4 h-4 mr-2 text-indigo-600 dark:text-indigo-400" />
+              Import from Excel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                setEditingStudent(null);
+                setIsFormOpen(true);
+              }}
+            >
+              <UserPlus className="w-4 h-4 mr-2" />
+              Register Student
+            </Button>
+          </div>
         </div>
 
         {/* Filter Panel */}
@@ -434,6 +462,13 @@ export const HRStudentManagement: React.FC = () => {
           student={viewingCalendarStudent}
         />
 
+        <StudentPasswordResetModal
+          isOpen={!!resettingPasswordStudent}
+          onClose={() => setResettingPasswordStudent(null)}
+          student={resettingPasswordStudent}
+          onSuccess={fetchStudents}
+        />
+
         {/* Remove Student Confirmation Modal */}
         <Modal
           isOpen={!!removingStudent}
@@ -492,6 +527,13 @@ export const HRStudentManagement: React.FC = () => {
             fetchStudents();
           }}
           student={enrollingFaceStudent}
+        />
+
+        {/* Student Excel Import Modal */}
+        <StudentExcelImportModal
+          isOpen={isImportModalOpen}
+          onClose={() => setIsImportModalOpen(false)}
+          onSuccess={fetchStudents}
         />
       </div>
     </Layout>

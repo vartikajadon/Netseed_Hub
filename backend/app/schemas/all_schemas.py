@@ -23,6 +23,8 @@ class UserUpdate(BaseModel):
 
 class UserResponse(UserBase):
     id: str
+    must_change_password: bool = False
+    enrollment_status: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     last_login_at: Optional[datetime] = None
@@ -33,6 +35,15 @@ class UserResponse(UserBase):
     last_logout_longitude: Optional[float] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: Optional[str] = None
+    new_password: str = Field(..., min_length=6, description="New password, minimum 6 characters")
+
+
+class AdminResetPasswordRequest(BaseModel):
+    new_password: Optional[str] = "Welcome@2026"
 
 
 class UserLocationLogResponse(BaseModel):
