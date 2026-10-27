@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../context/AuthContext';
 import { Button } from './Button';
 import { ShieldX, Mail, Phone, LogOut, AlertTriangle } from 'lucide-react';
@@ -38,9 +39,12 @@ export const AccessSuspendedModal: React.FC = () => {
     window.location.href = 'mailto:hr@netlink.org?subject=Inquiry%20Regarding%20Student%20Account%20Access';
   };
 
-  return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md select-none">
-      <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 border-2 border-rose-500/40 rounded-3xl shadow-2xl overflow-hidden p-6 sm:p-8 space-y-6 animate-scaleUp">
+  const modalContent = (
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md select-none"
+      style={{ margin: 0, top: 0, left: 0, right: 0, bottom: 0 }}
+    >
+      <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 border-2 border-rose-500/40 rounded-3xl shadow-2xl overflow-hidden p-6 sm:p-8 space-y-6 animate-scaleUp mx-auto my-auto">
         {/* Banner header */}
         <div className="flex items-center gap-4">
           <div className="w-16 h-16 rounded-2xl bg-rose-500/10 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0 border border-rose-500/30 shadow-inner">
@@ -110,4 +114,8 @@ export const AccessSuspendedModal: React.FC = () => {
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined'
+    ? createPortal(modalContent, document.body)
+    : modalContent;
 };

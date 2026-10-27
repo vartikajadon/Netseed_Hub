@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from './Button';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -56,9 +57,12 @@ export const FirstLoginPasswordModal: React.FC = () => {
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
-      <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-900/60 rounded-3xl shadow-2xl overflow-hidden p-6 sm:p-8 space-y-6">
+  const modalContent = (
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn"
+      style={{ margin: 0, top: 0, left: 0, right: 0, bottom: 0 }}
+    >
+      <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-900/60 rounded-3xl shadow-2xl overflow-hidden p-6 sm:p-8 space-y-6 mx-auto my-auto">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 border border-indigo-500/30 shadow-inner">
             <KeyRound className="w-7 h-7" />
@@ -175,4 +179,8 @@ export const FirstLoginPasswordModal: React.FC = () => {
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined'
+    ? createPortal(modalContent, document.body)
+    : modalContent;
 };
