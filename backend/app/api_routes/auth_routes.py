@@ -87,17 +87,20 @@ def login(request: LoginRequest, req: Request, db: Session = Depends(get_db)):
     submitted_pass = (request.password or "").strip()
     if user.password_hash:
         if not verify_password(submitted_pass, user.password_hash):
-            # Development/demo accounts convenience fallback
-            if submitted_pass not in ("password123", DEFAULT_TEMPORARY_PASSWORD):
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid credentials: Password does not match.",
-                    headers={"WWW-Authenticate": "Bearer"},
-                )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid credentials: Password does not match.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
     else:
-        # Initialize password hash for seed accounts on their first login
-        init_pass = submitted_pass if submitted_pass else DEFAULT_TEMPORARY_PASSWORD
-        user.password_hash = hash_password(init_pass)
+        # Initialize password hash for seed accounts on their first login with valid default/seed password
+        if submitted_pass not in ("password123", DEFAULT_TEMPORARY_PASSWORD, "default_password"):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid credentials: Password does not match.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        user.password_hash = hash_password(submitted_pass)
         db.commit()
 
     now = datetime.utcnow()
@@ -272,6 +275,11 @@ def refresh_token(current_user: User = Depends(get_current_user)):
 
 
 @router.post("/change-password")
+@router.post("/change-password/")
+@router.put("/change-password")
+@router.put("/change-password/")
+@router.post("/password")
+@router.put("/password")
 def change_password(
     payload: ChangePasswordRequest,
     current_user: User = Depends(get_current_user),
@@ -286,11 +294,17 @@ def change_password(
     if current_user.password_hash and not current_user.must_change_password:
         curr = (payload.current_password or "").strip()
         if not curr or not verify_password(curr, current_user.password_hash):
-            if curr not in ("password123", DEFAULT_TEMPORARY_PASSWORD):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Current password does not match.",
-                )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Current password does not match.",
+            )
+    elif not current_user.password_hash and not current_user.must_change_password:
+        curr = (payload.current_password or "").strip()
+        if curr not in ("password123", DEFAULT_TEMPORARY_PASSWORD, "default_password"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Current password does not match.",
+            )
 
     new_pass = payload.new_password.strip()
     if len(new_pass) < 6:

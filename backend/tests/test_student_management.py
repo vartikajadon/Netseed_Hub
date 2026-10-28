@@ -427,6 +427,20 @@ def test_password_management_flow_and_hr_reset(client):
     assert login_res.status_code == 200
     assert login_res.json()["user"]["must_change_password"] is False
 
+    # 2b. Verify that old/default password NO LONGER works after password change
+    old_login_res = client.post("/api/v1/auth/login", json={
+        "email": "student1@netlink.org",
+        "password": "password123"
+    })
+    assert old_login_res.status_code == 401, "Old/default password must NOT be allowed once password has been changed"
+
+    # 2c. Verify that attempting to change password using old/default password fails
+    fail_change = client.post("/api/v1/auth/change-password", json={
+        "current_password": "password123",
+        "new_password": "HackerPassword!2026"
+    }, headers=STUDENT1_HEADERS)
+    assert fail_change.status_code == 400
+
     # 3. HR resets student's password
     reset_res = client.post("/api/v1/students/std-rec-01/reset-password", json={
         "new_password": "Welcome@2026"
@@ -441,6 +455,34 @@ def test_password_management_flow_and_hr_reset(client):
     })
     assert temp_login_res.status_code == 200
     assert temp_login_res.json()["user"]["must_change_password"] is True
+
+    # 5. Student changes password using alias /api/v1/users/change-password
+    user_alias_res = client.post("/api/v1/users/change-password", json={
+        "current_password": "Welcome@2026",
+        "new_password": "BrandNewSecretPassword!2026"
+    }, headers=STUDENT1_HEADERS)
+    assert user_alias_res.status_code == 200
+
+    # 6. Student changes password using alias /api/v1/change-password
+    api_alias_res = client.post("/api/v1/change-password", json={
+        "current_password": "BrandNewSecretPassword!2026",
+        "new_password": "AnotherNewPassword!2026"
+    }, headers=STUDENT1_HEADERS)
+    assert api_alias_res.status_code == 200
+
+    # 7. HR resets student password by user_id (not student table id) without 404
+    reset_by_user_id = client.post("/api/v1/students/usr-student-001/reset-password", json={
+        "new_password": "ResetByUser@2026"
+    }, headers=HR_HEADERS)
+    assert reset_by_user_id.status_code == 200
+    assert reset_by_user_id.json()["temporary_password"] == "ResetByUser@2026"
+
+    # 8. HR resets student password by roll_number without 404
+    reset_by_roll = client.post("/api/v1/students/NL-2026-101/reset-password", json={
+        "new_password": "ResetByRoll@2026"
+    }, headers=HR_HEADERS)
+    assert reset_by_roll.status_code == 200
+    assert reset_by_roll.json()["temporary_password"] == "ResetByRoll@2026"
 
 
 def test_dropout_access_revocation_on_login_and_me(client):

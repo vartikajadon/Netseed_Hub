@@ -96,6 +96,8 @@ def run_db_setup():
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_logout_at TIMESTAMP",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_logout_latitude NUMERIC(10, 8)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_logout_longitude NUMERIC(11, 8)",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255)",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE",
         """CREATE TABLE IF NOT EXISTS user_location_logs (
             id VARCHAR(36) PRIMARY KEY,
             user_id VARCHAR(36) NOT NULL,
@@ -149,7 +151,10 @@ def run_db_setup():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Execute database setup safely during startup, never at top-level import
-    run_db_setup()
+    try:
+        run_db_setup()
+    except Exception as e:
+        logger.warning(f"Database setup deferred or encountered warning during lifespan: {e}")
     yield
 
 app = FastAPI(
@@ -176,8 +181,19 @@ app.add_middleware(GZipMiddleware, minimum_size=500)
 
 
 # Exception handlers
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers=getattr(exc, "headers", None)
+    )
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled server exception: {exc}", exc_info=True)
     return JSONResponse(
         status_code=500,
         content={"detail": f"Internal Server Error: {str(exc)}"}
@@ -185,6 +201,29 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 # Register routes
 app.include_router(api_router)
+
+from fastapi import Depends
+from sqlalchemy.orm import Session
+from app.database.session import get_db
+from app.core.auth import get_current_user
+from app.models.all_models import User
+from app.schemas.all_schemas import ChangePasswordRequest
+from app.api_routes.auth_routes import change_password
+
+@app.post("/auth/change-password", tags=["Authentication"])
+@app.put("/auth/change-password", tags=["Authentication"])
+@app.post("/change-password", tags=["Authentication"])
+@app.put("/change-password", tags=["Authentication"])
+@app.post("/users/change-password", tags=["Authentication"])
+@app.put("/users/change-password", tags=["Authentication"])
+def root_change_password(
+    payload: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Direct root-level alias for change password to prevent 404 on un-prefixed requests."""
+    return change_password(payload=payload, current_user=current_user, db=db)
+
 
 @app.get("/", tags=["Root"])
 def root():

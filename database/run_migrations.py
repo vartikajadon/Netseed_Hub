@@ -8,15 +8,38 @@ DB_FILE = os.path.join(BASE_DIR, "backend", "netlink_dev.db")
 sys.path.append(os.path.join(BASE_DIR, "backend"))
 from app.database.session import engine
 import app.models.all_models
+from sqlalchemy import text
 
 def apply_migrations():
-    print(f"Checking database at '{DB_FILE}'...")
+    print(f"Applying metadata & migrations to database dialect: '{engine.dialect.name}'...")
 
     # Re-create any missing tables from SQLAlchemy Metadata
     app.models.all_models.Base.metadata.create_all(bind=engine)
 
-    if os.path.exists(DB_FILE):
-        conn = sqlite3.connect(DB_FILE)
+    if engine.dialect.name == "postgresql":
+        with engine.connect() as conn:
+            # Batches
+            conn.execute(text("ALTER TABLE batches ADD COLUMN IF NOT EXISTS batch_type VARCHAR(50) DEFAULT 'TECH_MASTER';"))
+            conn.execute(text("ALTER TABLE batches ADD COLUMN IF NOT EXISTS training_duration_months INTEGER DEFAULT 6;"))
+            conn.execute(text("ALTER TABLE batches ADD COLUMN IF NOT EXISTS internship_duration_months INTEGER DEFAULT 6;"))
+            # Students
+            conn.execute(text("ALTER TABLE students ADD COLUMN IF NOT EXISTS total_fees DECIMAL(10, 2);"))
+            conn.execute(text("ALTER TABLE students ADD COLUMN IF NOT EXISTS payment_mode VARCHAR(50) DEFAULT 'ONLINE';"))
+            conn.execute(text("ALTER TABLE students ADD COLUMN IF NOT EXISTS installment_type VARCHAR(50) DEFAULT 'ONE_TIME';"))
+            # Users
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);"))
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE;"))
+            conn.commit()
+            print("PostgreSQL columns verified and updated!")
+
+    db_candidates = [
+        os.path.join(BASE_DIR, "backend", "netlink_dev.db"),
+        os.path.join(BASE_DIR, "netlink_dev.db"),
+    ]
+    for db_path in db_candidates:
+        if not os.path.exists(db_path):
+            continue
+        conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
 
         # 1. Batches table columns

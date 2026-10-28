@@ -176,11 +176,15 @@ def reset_student_password(
     HR / Super Admin resets a student's password to a temporary password and flags must_change_password=True.
     When the student logs in next, they will be required to create their own new password.
     """
-    student = db.query(Student).filter(Student.id == student_id).first()
+    student = db.query(Student).filter(
+        (Student.id == student_id) | (Student.user_id == student_id) | (Student.roll_number == student_id)
+    ).first()
     if not student:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Student '{student_id}' not found.")
 
     user = student.user
+    if not user:
+        user = db.query(User).filter(User.id == student.user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User account associated with student not found.")
 

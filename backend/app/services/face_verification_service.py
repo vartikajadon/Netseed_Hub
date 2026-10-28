@@ -4,7 +4,11 @@ import math
 import base64
 import logging
 import numpy as np
-import cv2
+try:
+    import cv2
+except Exception as _cv_err:
+    cv2 = None
+
 from typing import Optional, List, Tuple, Dict, Any
 from sqlalchemy.orm import Session
 from app.models.all_models import FaceTemplate, Student
@@ -14,7 +18,10 @@ logger = logging.getLogger(__name__)
 
 # Initialize Haar Cascade as fast detector & fallback
 try:
-    HAAR_CASCADE = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+    if cv2 is not None and hasattr(cv2, "data") and hasattr(cv2.data, "haarcascades"):
+        HAAR_CASCADE = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+    else:
+        HAAR_CASCADE = None
 except Exception as e:
     logger.warning(f"Haar Cascade detector initialization deferred or unavailable: {e}")
     HAAR_CASCADE = None

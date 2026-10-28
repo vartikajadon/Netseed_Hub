@@ -41,17 +41,36 @@ export const FirstLoginPasswordModal: React.FC = () => {
 
     setIsLoading(true);
     try {
-      await api.post('/auth/change-password', {
+      const payload = {
         current_password: currentPassword || undefined,
         new_password: newPassword,
-      });
+      };
+
+      try {
+        await api.post('/auth/change-password', payload);
+      } catch (postErr: any) {
+        if (postErr.status === 404 || postErr.message?.toLowerCase().includes('not found')) {
+          try {
+            await api.post('/users/change-password', payload);
+          } catch {
+            await api.post('/change-password', payload);
+          }
+        } else {
+          throw postErr;
+        }
+      }
 
       updateUser({ must_change_password: false });
       setSuccess('Password updated successfully! Welcome to your dashboard.');
     } catch (err: any) {
-      setError(
-        err.message || 'Failed to update password. Please verify the temporary password provided by HR.'
-      );
+      const msg = err.message || '';
+      if (msg.toLowerCase().includes('not match')) {
+        setError('Temporary password does not match. Please verify the credentials provided by HR.');
+      } else if (msg.toLowerCase().includes('not found')) {
+        setError('Password service endpoint could not be reached. Please check backend connection.');
+      } else {
+        setError(msg || 'Failed to update password. Please verify the temporary password provided by HR.');
+      }
     } finally {
       setIsLoading(false);
     }

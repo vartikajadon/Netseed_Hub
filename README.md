@@ -222,3 +222,19 @@ python -m pytest
   - Mentors can view assigned trainees via `GET /api/v1/students`. Unassigned student profile requests yield `403 Forbidden`.
 - **Audit Logging**:
   - Sensitive operations (`CREATE_PROGRAM`, `CREATE_BATCH`, `CREATE_STUDENT`, `ASSIGN_MENTOR`, `CHANGE_STUDENT_STATUS`) generate immutable audit log entries.
+
+-----------------------------------------------------------------------------------------------------
+
+Start the React Vite development server:
+
+```bash
+cd frontend
+npm run dev
+```
+
+Start the FastAPI application server:
+
+```bash
+cd backend
+python -m uvicorn app.main:app --reload --port 8000
+```

@@ -26,6 +26,8 @@ else:
         engine_kwargs["poolclass"] = NullPool
         connect_args["prepare_threshold"] = None
 
+    connect_args.setdefault("connect_timeout", 5)
+
 if not (db_url.startswith("sqlite") or "pooler.supabase.com" in db_url or os.environ.get("VERCEL") == "1" or "AWS_LAMBDA_FUNCTION_NAME" in os.environ):
     engine_kwargs.setdefault("pool_size", 10)
     engine_kwargs.setdefault("max_overflow", 20)

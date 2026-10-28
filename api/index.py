@@ -5,15 +5,15 @@ import sys
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BACKEND_DIR = os.path.join(ROOT_DIR, "backend")
 
-for path in [ROOT_DIR, BACKEND_DIR]:
+for path in [BACKEND_DIR, ROOT_DIR]:
     if path not in sys.path:
         sys.path.insert(0, path)
 
 try:
     try:
-        from backend.app.main import app
-    except ImportError:
         from app.main import app
+    except ImportError:
+        from backend.app.main import app
 except Exception as e:
     import json
     import traceback
@@ -21,7 +21,15 @@ except Exception as e:
     print(f"CRITICAL STARTUP ERROR in api/index.py:\n{error_trace}")
 
     async def app(scope, receive, send):
-        if scope["type"] == "http":
+        if scope["type"] == "lifespan":
+            while True:
+                message = await receive()
+                if message["type"] == "lifespan.startup":
+                    await send({"type": "lifespan.startup.complete"})
+                elif message["type"] == "lifespan.shutdown":
+                    await send({"type": "lifespan.shutdown.complete"})
+                    return
+        elif scope["type"] == "http":
             payload = json.dumps({
                 "status": "error",
                 "message": "Backend initialization failed on startup.",

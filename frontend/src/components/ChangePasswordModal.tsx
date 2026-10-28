@@ -71,10 +71,25 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
 
     setIsLoading(true);
     try {
-      await api.post('/auth/change-password', {
+      const payload = {
         current_password: requireCurrentPassword ? currentPassword : (currentPassword || undefined),
         new_password: newPassword,
-      });
+      };
+
+      // Try primary endpoint with graceful fallback if 404
+      try {
+        await api.post('/auth/change-password', payload);
+      } catch (postErr: any) {
+        if (postErr.status === 404 || postErr.message?.toLowerCase().includes('not found')) {
+          try {
+            await api.post('/users/change-password', payload);
+          } catch {
+            await api.post('/change-password', payload);
+          }
+        } else {
+          throw postErr;
+        }
+      }
 
       updateUser({ must_change_password: false });
       setSuccess('Your password has been changed successfully!');
@@ -84,7 +99,14 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
         handleClose();
       }, 1500);
     } catch (err: any) {
-      setError(err.message || 'Failed to change password. Please check your current password and try again.');
+      const msg = err.message || '';
+      if (msg.toLowerCase().includes('not match')) {
+        setError('Current password does not match. Please verify your current credentials.');
+      } else if (msg.toLowerCase().includes('not found')) {
+        setError('Password service endpoint could not be reached. Please verify the backend API server is active.');
+      } else {
+        setError(msg || 'Failed to change password. Please check your current password and try again.');
+      }
     } finally {
       setIsLoading(false);
     }

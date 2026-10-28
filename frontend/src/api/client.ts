@@ -3,14 +3,27 @@
 export const FIXED_BACKEND_API_URL = 'https://netseed-hub.vercel.app/api/v1';
 
 export function getApiBaseUrl(): string {
-  // If running locally in development, target local backend API engine via direct IPv4 to eliminate Windows localhost IPv6 resolution lag
-  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-    return 'http://127.0.0.1:8000/api/v1';
+  // 1. If running locally in development, target local backend API engine via direct IPv4 to eliminate Windows localhost IPv6 resolution lag
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname.toLowerCase();
+    const isLocal =
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host === '[::1]' ||
+      host === '::1' ||
+      host === '0.0.0.0' ||
+      host.endsWith('.local') ||
+      host.startsWith('192.168.') ||
+      host.startsWith('10.') ||
+      host.startsWith('172.');
+    if (isLocal) {
+      return 'http://127.0.0.1:8000/api/v1';
+    }
   }
 
-  // If an environment variable is explicitly supplied (e.g. at build or in deployment), respect it
+  // 2. If an environment variable is explicitly supplied (e.g. at build or in deployment), respect it
   const envUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
-  if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
+  if (envUrl) {
     let clean = envUrl.replace(/\/+$/, '');
     if (!clean.endsWith('/api/v1')) {
       clean = `${clean}/api/v1`;

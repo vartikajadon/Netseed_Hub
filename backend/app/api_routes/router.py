@@ -68,3 +68,21 @@ def get_standardized_time():
         "timestamp_ms": int(time.time() * 1000),
         "source": "Standardized Synchronized Network Time (UTC / Google NTP aligned)",
     }
+
+from fastapi import Depends
+from sqlalchemy.orm import Session
+from app.database.session import get_db
+from app.core.auth import get_current_user
+from app.models.all_models import User
+from app.schemas.all_schemas import ChangePasswordRequest
+from app.api_routes.auth_routes import change_password
+
+@api_router.post("/change-password")
+@api_router.put("/change-password")
+def api_v1_change_password(
+    payload: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    return change_password(payload=payload, current_user=current_user, db=db)
+

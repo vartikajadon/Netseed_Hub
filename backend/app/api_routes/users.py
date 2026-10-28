@@ -5,10 +5,28 @@ from app.database.session import get_db
 from app.core.auth import get_current_user
 from app.core.permissions import require_staff, require_hr, require_super_admin
 from app.models.all_models import User
-from app.schemas.all_schemas import UserResponse, UserCreate, UserUpdate, AuditLogResponse
+from app.schemas.all_schemas import UserResponse, UserCreate, UserUpdate, AuditLogResponse, ChangePasswordRequest
 from app.services.base_services import UserService
+from app.api_routes.auth_routes import change_password
 
 router = APIRouter(prefix="/users", tags=["Users"])
+
+@router.post("/change-password")
+@router.put("/change-password")
+@router.post("/me/change-password")
+@router.put("/me/change-password")
+@router.post("/me/password")
+@router.put("/me/password")
+def users_change_password(
+    payload: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    User change password alias endpoint under /users.
+    """
+    return change_password(payload=payload, current_user=current_user, db=db)
+
 
 @router.get("", response_model=List[UserResponse])
 def list_users(
