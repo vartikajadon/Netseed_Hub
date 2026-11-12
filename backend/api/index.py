@@ -43,6 +43,8 @@ except Exception as e:
                 "headers": [
                     [b"content-type", b"application/json"],
                     [b"access-control-allow-origin", b"*"],
+                    [b"access-control-allow-methods", b"*"],
+                    [b"access-control-allow-headers", b"*"],
                 ],
             })
             await send({

@@ -1,48 +1,21 @@
 import os
-from sqlalchemy import create_engine
+import logging
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.pool import NullPool
-from app.configuration.config import settings
+from app.configuration.config import settings, SQLITE_DEFAULT_URL
 
-db_url = settings.DATABASE_URL
-connect_args = {}
-engine_kwargs = {"pool_pre_ping": True}
+logger = logging.getLogger(__name__)
 
-if db_url.startswith("sqlite"):
-    connect_args = {"check_same_thread": False}
-else:
-    if db_url.startswith("postgresql://"):
-        db_url = db_url.replace("postgresql://", "postgresql+psycopg://", 1)
-    elif db_url.startswith("postgres://"):
-        db_url = db_url.replace("postgres://", "postgresql+psycopg://", 1)
+Base = declarative_base()
 
-    # Supabase Transaction Pooler Optimization:
-    # Port 5432 in Supabase Pooler is Session mode (limited to 15 clients).
-    # Port 6543 is Transaction mode (supports high concurrency serverless connections).
-    if "pooler.supabase.com:5432" in db_url:
-        db_url = db_url.replace("pooler.supabase.com:5432", "pooler.supabase.com:6543")
-
-    if "pooler.supabase.com" in db_url or os.environ.get("VERCEL") == "1" or "AWS_LAMBDA_FUNCTION_NAME" in os.environ:
-        engine_kwargs["poolclass"] = NullPool
-        connect_args["prepare_threshold"] = None
-
-    connect_args.setdefault("connect_timeout", 5)
-
-if not (db_url.startswith("sqlite") or "pooler.supabase.com" in db_url or os.environ.get("VERCEL") == "1" or "AWS_LAMBDA_FUNCTION_NAME" in os.environ):
-    engine_kwargs.setdefault("pool_size", 10)
-    engine_kwargs.setdefault("max_overflow", 20)
-    engine_kwargs.setdefault("pool_recycle", 1800)
-
-engine = create_engine(
-    db_url,
-    connect_args=connect_args,
-    **engine_kwargs
-)
-
-if db_url.startswith("sqlite"):
-    from sqlalchemy import event
-
-    @event.listens_for(engine, "connect")
+def create_sqlite_engine(url: str):
+    eng = create_engine(
+        url,
+        connect_args={"check_same_thread": False},
+        pool_pre_ping=True
+    )
+    @event.listens_for(eng, "connect")
     def set_sqlite_pragma(dbapi_connection, connection_record):
         cursor = dbapi_connection.cursor()
         try:
@@ -54,13 +27,79 @@ if db_url.startswith("sqlite"):
             pass
         finally:
             cursor.close()
+    return eng
+
+def create_postgres_engine(url: str):
+    connect_args = {}
+    engine_kwargs = {"pool_pre_ping": True}
+
+    if url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+psycopg://", 1)
+    elif url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+psycopg://", 1)
+
+    if "pooler.supabase.com:5432" in url:
+        url = url.replace("pooler.supabase.com:5432", "pooler.supabase.com:6543")
+
+    if "pooler.supabase.com" in url or os.environ.get("VERCEL") == "1" or "AWS_LAMBDA_FUNCTION_NAME" in os.environ:
+        engine_kwargs["poolclass"] = NullPool
+        connect_args["prepare_threshold"] = None
+
+    connect_args["connect_timeout"] = 3
+
+    if not ("pooler.supabase.com" in url or os.environ.get("VERCEL") == "1" or "AWS_LAMBDA_FUNCTION_NAME" in os.environ):
+        engine_kwargs.setdefault("pool_size", 10)
+        engine_kwargs.setdefault("max_overflow", 20)
+        engine_kwargs.setdefault("pool_recycle", 1800)
+
+    return create_engine(url, connect_args=connect_args, **engine_kwargs)
+
+
+db_url = settings.DATABASE_URL
+_is_primary_postgres = not db_url.startswith("sqlite")
+
+if _is_primary_postgres:
+    try:
+        candidate_engine = create_postgres_engine(db_url)
+        with candidate_engine.connect() as test_conn:
+            test_conn.execute(text("SELECT 1"))
+        engine = candidate_engine
+        logger.info(f"Connected successfully to primary PostgreSQL database: {engine.url.render_as_string(hide_password=True)}")
+    except Exception as e:
+        logger.warning(
+            f"Primary database connection failed ({e}). Automatically engaging resilient SQLite fallback: {SQLITE_DEFAULT_URL}"
+        )
+        engine = create_sqlite_engine(SQLITE_DEFAULT_URL)
+else:
+    engine = create_sqlite_engine(db_url)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+
+def switch_to_sqlite_fallback():
+    global engine, SessionLocal
+    if str(engine.url).startswith("sqlite"):
+        return
+    logger.warning(f"Dynamically switching database engine to SQLite fallback: {SQLITE_DEFAULT_URL}")
+    engine = create_sqlite_engine(SQLITE_DEFAULT_URL)
+    SessionLocal.configure(bind=engine)
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as ex:
+        logger.warning(f"Error creating metadata on SQLite fallback: {ex}")
 
 def get_db():
+    global engine, SessionLocal
     db = SessionLocal()
     try:
         yield db
+    except Exception as e:
+        from sqlalchemy.exc import OperationalError
+        if isinstance(e, OperationalError) and not str(engine.url).startswith("sqlite"):
+            logger.warning(f"Database connection error during query ({e}). Switching to SQLite fallback...")
+            switch_to_sqlite_fallback()
+        raise
     finally:
-        db.close()
+        try:
+            db.close()
+        except Exception:
+            pass

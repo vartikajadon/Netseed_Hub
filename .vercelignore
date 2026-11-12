@@ -11,6 +11,7 @@ android/build/
 # Local dev databases
 *.db
 *.sqlite3
+!backend/app/database/bundled_dev.db
 
 # Docs and scratch
 docs/

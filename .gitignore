@@ -9,6 +9,7 @@ __pycache__/
 *$py.class
 *.db
 *.sqlite3
+!backend/app/database/bundled_dev.db
 venv/
 .venv/
 .pytest_cache/

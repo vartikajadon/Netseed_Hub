@@ -145,6 +145,24 @@ def run_db_setup():
                     except Exception:
                         pass
         _setup_completed = True
+        try:
+            from app.models.all_models import User
+            from app.database.session import SessionLocal
+            with SessionLocal() as db:
+                user_count = db.query(User).count()
+                if user_count == 0:
+                    logger.info("Database has 0 users. Running auto-seed...")
+                    try:
+                        from seed_data import run_seed
+                        run_seed()
+                    except ImportError:
+                        try:
+                            from backend.seed_data import run_seed
+                            run_seed()
+                        except Exception as err:
+                            logger.warning(f"Auto-seed attempt failed: {err}")
+        except Exception as seed_err:
+            logger.warning(f"Auto-seed check encountered: {seed_err}")
     except Exception as e:
         logger.warning(f"Database setup connection warning: {e}")
 
@@ -183,12 +201,27 @@ app.add_middleware(GZipMiddleware, minimum_size=500)
 # Exception handlers
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+def _cors_headers(request: Request, base_headers: dict = None) -> dict:
+    headers = dict(base_headers or {})
+    origin = request.headers.get("origin")
+    if origin:
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+        headers["Access-Control-Allow-Methods"] = "*"
+        headers["Access-Control-Allow-Headers"] = "*"
+        headers["Vary"] = "Origin"
+    else:
+        headers["Access-Control-Allow-Origin"] = "*"
+        headers["Access-Control-Allow-Methods"] = "*"
+        headers["Access-Control-Allow-Headers"] = "*"
+    return headers
+
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail},
-        headers=getattr(exc, "headers", None)
+        headers=_cors_headers(request, getattr(exc, "headers", None))
     )
 
 @app.exception_handler(Exception)
@@ -196,7 +229,8 @@ async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled server exception: {exc}", exc_info=True)
     return JSONResponse(
         status_code=500,
-        content={"detail": f"Internal Server Error: {str(exc)}"}
+        content={"detail": f"Internal Server Error: {str(exc)}"},
+        headers=_cors_headers(request)
     )
 
 # Register routes
@@ -242,13 +276,14 @@ def health_check():
         from sqlalchemy import text
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-        db_status = "connected"
+        db_status = f"connected ({engine.dialect.name})"
     except Exception as e:
         db_status = f"disconnected: {str(e)}"
 
     return {
         "status": "healthy",
         "database": db_status,
+        "database_dialect": getattr(engine.dialect, "name", "unknown"),
         "app_name": settings.APP_NAME,
         "environment": settings.ENVIRONMENT
     }

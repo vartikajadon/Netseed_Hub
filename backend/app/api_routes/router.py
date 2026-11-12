@@ -26,6 +26,24 @@ from app.api_routes.projects import router as projects_router
 
 api_router = APIRouter(prefix="/api/v1")
 
+@api_router.get("", tags=["Status"])
+@api_router.get("/", tags=["Status"])
+def api_v1_index():
+    """Live API v1 root health & discovery endpoint."""
+    return {
+        "status": "online",
+        "version": "v1",
+        "description": "netSEED Hub API Engine v1",
+        "endpoints": {
+            "auth": "/api/v1/auth",
+            "students": "/api/v1/students",
+            "batches": "/api/v1/batches",
+            "programs": "/api/v1/programs",
+            "health": "/health",
+            "docs": "/docs"
+        }
+    }
+
 
 
 
