@@ -22,6 +22,8 @@ except Exception as e:
     import json
     import traceback
     error_trace = traceback.format_exc()
+    error_msg = str(e)
+    trace_lines = error_trace.splitlines()[-8:]
     print(f"CRITICAL STARTUP ERROR in api/index.py:\n{error_trace}")
 
     async def app(scope, receive, send):
@@ -29,8 +31,8 @@ except Exception as e:
             payload = json.dumps({
                 "status": "error",
                 "message": "Backend initialization failed on startup.",
-                "detail": str(e),
-                "traceback": error_trace.splitlines()[-8:]
+                "detail": error_msg,
+                "traceback": trace_lines
             }).encode("utf-8")
             await send({
                 "type": "http.response.start",

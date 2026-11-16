@@ -211,3 +211,4 @@ def ensure_baseline_data(db: Session):
     except Exception as e:
         db.rollback()
         logger.warning(f"Baseline seed initialization note: {e}")
+
