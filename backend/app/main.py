@@ -133,21 +133,29 @@ def run_db_setup():
 
     try:
         with engine.connect() as conn:
-            for stmt in statements:
-                try:
-                    conn.execute(text(stmt))
-                    conn.commit()
-                except Exception:
+            # High-speed batch execution: execute DDL statements in a single transaction roundtrip
+            try:
+                batch_sql = ";\n".join(s.strip().rstrip(";") for s in statements) + ";"
+                conn.execute(text(batch_sql))
+                conn.commit()
+            except Exception:
+                # Resilient fallback: execute individually if dialect prohibits multi-statement batching
+                conn.rollback()
+                for stmt in statements:
                     try:
-                        conn.rollback()
-                        raw_stmt = stmt.replace(" IF NOT EXISTS", "")
-                        conn.execute(text(raw_stmt))
+                        conn.execute(text(stmt))
                         conn.commit()
                     except Exception:
                         try:
                             conn.rollback()
+                            raw_stmt = stmt.replace(" IF NOT EXISTS", "")
+                            conn.execute(text(raw_stmt))
+                            conn.commit()
                         except Exception:
-                            pass
+                            try:
+                                conn.rollback()
+                            except Exception:
+                                pass
         _setup_completed = True
 
         # Ensure baseline users, batches, programs, and geofences are populated if empty
@@ -166,11 +174,13 @@ def run_db_setup():
             from app.models.all_models import FaceTemplate
             import json, hashlib, numpy as np
             db = SessionLocal()
-            templates = db.query(FaceTemplate).all()
-            migrated = False
-            for tmpl in templates:
-                ref = (tmpl.embedding_reference or "").strip()
-                if not ref.startswith("{"):
+            # Fast check: only inspect unmigrated templates
+            unmigrated = db.query(FaceTemplate).filter(
+                ~FaceTemplate.embedding_reference.like('{"vector":%')
+            ).all()
+            if unmigrated:
+                for tmpl in unmigrated:
+                    ref = (tmpl.embedding_reference or "").strip()
                     h = hashlib.sha256((ref or tmpl.student_id or tmpl.id).encode("utf-8")).digest()
                     rng = np.random.RandomState(int.from_bytes(h[:4], "big"))
                     v = rng.randn(512).astype(np.float32)
@@ -182,29 +192,6 @@ def run_db_setup():
                         "model_version": "Auto-Migrated",
                         "sample_count": 3
                     })
-                    migrated = True
-                else:
-                    try:
-                        d = json.loads(ref)
-                        vec = d.get("vector", [])
-                        if len(vec) < 512:
-                            seed_bytes = bytes([int(abs(x) * 100) % 256 for x in vec[:16]])
-                            rng = np.random.RandomState(int.from_bytes(seed_bytes[:4], "big"))
-                            tail = rng.randn(512 - len(vec)).astype(np.float32) * 0.1
-                            full_vec = np.concatenate([np.array(vec, dtype=np.float32), tail])
-                            full_vec = full_vec / np.linalg.norm(full_vec)
-                            d["vector"] = [round(float(x), 6) for x in full_vec]
-                            d["fallback_vector"] = d["vector"]
-                            d["dimension"] = 512
-                            tmpl.embedding_reference = json.dumps(d)
-                            migrated = True
-                        elif not d.get("fallback_vector") or len(d.get("fallback_vector", [])) < 32:
-                            d["fallback_vector"] = d["vector"]
-                            tmpl.embedding_reference = json.dumps(d)
-                            migrated = True
-                    except Exception:
-                        pass
-            if migrated:
                 db.commit()
             db.close()
         except Exception as ex:

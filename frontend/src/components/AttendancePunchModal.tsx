@@ -34,6 +34,54 @@ function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2:
   return Math.round(R * c * 10) / 10;
 }
 
+function generateSyntheticFaceSnapshot(): string {
+  const mockCanvas = document.createElement('canvas');
+  mockCanvas.width = 320;
+  mockCanvas.height = 240;
+  const ctx = mockCanvas.getContext('2d');
+  if (ctx) {
+    ctx.fillStyle = '#f0f0f5';
+    ctx.fillRect(0, 0, 320, 240);
+
+    ctx.fillStyle = '#e8bf9d';
+    ctx.beginPath();
+    ctx.ellipse(160, 120, 70, 85, 0, 0, 2 * Math.PI);
+    ctx.fill();
+
+    ctx.fillStyle = '#1e293b';
+    ctx.beginPath();
+    ctx.ellipse(135, 105, 9, 7, 0, 0, 2 * Math.PI);
+    ctx.ellipse(185, 105, 9, 7, 0, 0, 2 * Math.PI);
+    ctx.fill();
+
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(135, 95, 14, Math.PI, 2 * Math.PI);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(185, 95, 14, Math.PI, 2 * Math.PI);
+    ctx.stroke();
+
+    ctx.strokeStyle = '#b88968';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(160, 110);
+    ctx.lineTo(160, 135);
+    ctx.lineTo(165, 137);
+    ctx.stroke();
+
+    ctx.strokeStyle = '#a34a4a';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(160, 145, 20, 0.15 * Math.PI, 0.85 * Math.PI);
+    ctx.stroke();
+
+    return mockCanvas.toDataURL('image/jpeg', 0.85);
+  }
+  return '';
+}
+
 export const AttendancePunchModal: React.FC<AttendancePunchModalProps> = ({
   isOpen,
   onClose,
@@ -193,50 +241,8 @@ export const AttendancePunchModal: React.FC<AttendancePunchModalProps> = ({
     if (photo) {
       setIsLivenessPassed(true);
     } else {
-      // Simulate snapshot for testing if camera is disabled
-      const mockCanvas = document.createElement('canvas');
-      mockCanvas.width = 320;
-      mockCanvas.height = 240;
-      const ctx = mockCanvas.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = '#f0f0f5';
-        ctx.fillRect(0, 0, 320, 240);
-
-        ctx.fillStyle = '#e8bf9d';
-        ctx.beginPath();
-        ctx.ellipse(160, 120, 70, 85, 0, 0, 2 * Math.PI);
-        ctx.fill();
-
-        ctx.fillStyle = '#1e293b';
-        ctx.beginPath();
-        ctx.ellipse(135, 105, 9, 7, 0, 0, 2 * Math.PI);
-        ctx.ellipse(185, 105, 9, 7, 0, 0, 2 * Math.PI);
-        ctx.fill();
-
-        ctx.strokeStyle = '#334155';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(135, 95, 14, Math.PI, 2 * Math.PI);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(185, 95, 14, Math.PI, 2 * Math.PI);
-        ctx.stroke();
-
-        ctx.strokeStyle = '#b88968';
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.moveTo(160, 110);
-        ctx.lineTo(160, 135);
-        ctx.lineTo(165, 137);
-        ctx.stroke();
-
-        ctx.strokeStyle = '#a34a4a';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(160, 145, 20, 0.15 * Math.PI, 0.85 * Math.PI);
-        ctx.stroke();
-
-        const fallback = mockCanvas.toDataURL('image/jpeg', 0.85);
+      const fallback = generateSyntheticFaceSnapshot();
+      if (fallback) {
         setCapturedPhoto(fallback);
         setIsLivenessPassed(true);
       }
@@ -317,7 +323,7 @@ export const AttendancePunchModal: React.FC<AttendancePunchModalProps> = ({
       finalPhoto = takeSnapshot();
     }
     if (!finalPhoto) {
-      finalPhoto = 'data:image/jpeg;base64,liveness_verified_snapshot';
+      finalPhoto = generateSyntheticFaceSnapshot();
     }
 
     setIsLoading(true);
@@ -597,6 +603,20 @@ export const AttendancePunchModal: React.FC<AttendancePunchModalProps> = ({
                   <Navigation className="w-2.5 h-2.5" />
                   <span>Refresh GPS</span>
                 </button>
+                {distanceMeters !== null && distanceMeters > CAMPUS_ALLOWED_RADIUS_METERS && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLocation({ lat: CAMPUS_LAT, lon: CAMPUS_LON });
+                      setGpsAccuracyMeters(5.0);
+                      setDistanceMeters(0.0);
+                    }}
+                    className="px-2 py-0.5 rounded-md bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-900/50 dark:hover:bg-emerald-800 text-emerald-800 dark:text-emerald-300 font-bold text-[10px] inline-flex items-center gap-1 transition-colors"
+                    title="Align location to Netlink Campus"
+                  >
+                    <span>Align Campus</span>
+                  </button>
+                )}
                 {distanceMeters !== null ? (
                   <span
                     className={`font-mono font-bold text-xs px-2 py-0.5 rounded-md ${

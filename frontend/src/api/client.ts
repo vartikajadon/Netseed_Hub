@@ -21,9 +21,15 @@ export function getApiBaseUrl(): string {
     if (isLocal) {
       return 'http://127.0.0.1:8000/api/v1';
     }
+
+    // 2. If running deployed on the exact host netseed-hub.vercel.app, use relative /api/v1
+    // This leverages HTTP/2 multiplexing and eliminates CORS OPTIONS preflight latency entirely
+    if (host === 'netseed-hub.vercel.app') {
+      return '/api/v1';
+    }
   }
 
-  // 2. If an environment variable is explicitly supplied (e.g. at build or in deployment), respect it
+  // 3. If an environment variable is explicitly supplied (e.g. at build or in deployment), respect it
   const envUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
   if (envUrl) {
     let clean = envUrl.replace(/\/+$/, '');
@@ -72,17 +78,37 @@ interface CacheEntry {
 // In-memory & session cache for ultra-fast instantaneous navigation & deduplication
 const memoryCache = new Map<string, CacheEntry>();
 const inflightRequests = new Map<string, Promise<any>>();
-const DEFAULT_CACHE_TTL_MS = 60 * 1000; // 60 seconds default TTL
+const DEFAULT_CACHE_TTL_MS = 60 * 1000; // 60 seconds fresh TTL
+const STALE_MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes max stale age for SWR instant rendering
 const SESSION_CACHE_PREFIX = 'ns_c_';
 
-function getSessionCache<T>(key: string, ttl: number): T | null {
+// Endpoints that should never be cached or served stale
+const NEVER_CACHE_PATTERNS = [
+  '/attendance/liveness-challenge',
+  '/attendance/verify-face',
+  '/attendance/enroll-face',
+  '/auth/refresh',
+  '/system/time',
+];
+
+// Pre-warm backend serverless instance and connection pool on page boot
+if (typeof window !== 'undefined') {
+  setTimeout(() => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      fetch(`${baseUrl}/health`, { mode: 'cors' }).catch(() => {});
+    } catch {}
+  }, 150);
+}
+
+function getSessionCache<T>(key: string, ttl: number): { data: T; timestamp: number } | null {
   if (typeof window === 'undefined') return null;
   try {
     const raw = sessionStorage.getItem(`${SESSION_CACHE_PREFIX}${key}`);
     if (!raw) return null;
     const entry: CacheEntry = JSON.parse(raw);
     if (Date.now() - entry.timestamp < ttl) {
-      return entry.data as T;
+      return { data: entry.data as T, timestamp: entry.timestamp };
     }
   } catch {}
   return null;
@@ -128,29 +154,61 @@ export function clearApiCache(prefix?: string) {
   clearSessionCache(prefix);
 }
 
+// Background revalidation for Stale-While-Revalidate pattern
+function triggerBackgroundRevalidation<T>(
+  cleanEndpoint: string,
+  cacheKey: string,
+  options: RequestOptions
+) {
+  if (inflightRequests.has(cacheKey)) return;
+  request<T>(cleanEndpoint, { ...options, bypassCache: true })
+    .then((fresh) => {
+      memoryCache.set(cacheKey, { data: fresh, timestamp: Date.now() });
+      setSessionCache(cacheKey, fresh);
+    })
+    .catch(() => {
+      // Non-blocking: background revalidation failure keeps current view stable
+    });
+}
+
 async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
   const token = localStorage.getItem('access_token');
   const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const method = (options.method || 'GET').toUpperCase();
   const isGet = method === 'GET';
-  const bypassCache = options.bypassCache ?? false;
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+
+  const isNeverCache = NEVER_CACHE_PATTERNS.some((pat) => cleanEndpoint.includes(pat));
+  const bypassCache = (options.bypassCache ?? false) || isNeverCache;
   const cacheTtlMs = options.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS;
 
-  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   const cacheKey = `${token || 'anon'}:${cleanEndpoint}`;
 
-  // 1. In-memory Cache, Session Cache & In-flight Deduplication for GET requests
+  // 1. Stale-While-Revalidate (SWR) & In-flight Deduplication for GET requests
   if (isGet && !bypassCache) {
     const now = Date.now();
     const cached = memoryCache.get(cacheKey);
-    if (cached && now - cached.timestamp < cacheTtlMs) {
-      return cached.data as T;
+
+    if (cached) {
+      // If fresh, return immediately
+      if (now - cached.timestamp < cacheTtlMs) {
+        return cached.data as T;
+      }
+      // If stale but within STALE_MAX_AGE_MS, return immediately and revalidate in background
+      if (now - cached.timestamp < STALE_MAX_AGE_MS) {
+        triggerBackgroundRevalidation<T>(cleanEndpoint, cacheKey, options);
+        return cached.data as T;
+      }
     }
 
-    const sessionCached = getSessionCache<T>(cacheKey, cacheTtlMs);
+    const sessionCached = getSessionCache<T>(cacheKey, STALE_MAX_AGE_MS);
     if (sessionCached) {
-      memoryCache.set(cacheKey, { data: sessionCached, timestamp: now });
-      return sessionCached;
+      memoryCache.set(cacheKey, sessionCached);
+      if (now - sessionCached.timestamp < cacheTtlMs) {
+        return sessionCached.data;
+      }
+      triggerBackgroundRevalidation<T>(cleanEndpoint, cacheKey, options);
+      return sessionCached.data;
     }
 
     if (inflightRequests.has(cacheKey)) {

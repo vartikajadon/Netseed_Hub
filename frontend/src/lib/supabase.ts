@@ -16,12 +16,72 @@ export const getSupabase = async (): Promise<SupabaseClient> => {
           autoRefreshToken: true,
           detectSessionInUrl: true,
         },
+        realtime: {
+          params: {
+            eventsPerSecond: 20,
+          },
+        },
       });
       return clientInstance;
     });
   }
   return clientPromise;
 };
+
+export interface RealtimeSubscriptionOptions {
+  table: string;
+  schema?: string;
+  filter?: string;
+  onInsert?: (payload: any) => void;
+  onUpdate?: (payload: any) => void;
+  onDelete?: (payload: any) => void;
+  onChange?: (payload: any) => void;
+}
+
+/**
+ * Real-time fast WebSocket subscription helper for Supabase Postgres CDC.
+ * Allows components to reactively update data without periodic polling.
+ */
+export function subscribeToRealtimeTable(options: RealtimeSubscriptionOptions): { unsubscribe: () => void } {
+  let isUnsubscribed = false;
+  let activeChannel: any = null;
+
+  getSupabase().then((client) => {
+    if (isUnsubscribed) return;
+    const channelName = `rt_${options.table}_${Math.random().toString(36).slice(2, 8)}`;
+    const channel = client.channel(channelName);
+
+    channel.on(
+      'postgres_changes' as any,
+      {
+        event: '*',
+        schema: options.schema || 'public',
+        table: options.table,
+        filter: options.filter,
+      },
+      (payload: any) => {
+        if (options.onChange) options.onChange(payload);
+        if (payload.eventType === 'INSERT' && options.onInsert) options.onInsert(payload.new);
+        if (payload.eventType === 'UPDATE' && options.onUpdate) options.onUpdate(payload.new);
+        if (payload.eventType === 'DELETE' && options.onDelete) options.onDelete(payload.old);
+      }
+    );
+
+    channel.subscribe();
+    activeChannel = channel;
+  }).catch((err) => {
+    console.warn(`Supabase realtime subscription for table ${options.table} failed:`, err);
+  });
+
+  return {
+    unsubscribe: () => {
+      isUnsubscribed = true;
+      if (activeChannel) {
+        activeChannel.unsubscribe();
+      }
+    },
+  };
+}
 
 // Seamless proxy for backward compatibility with `supabase.auth.*` without blocking initial bundle
 export const supabase = {

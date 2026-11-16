@@ -28,16 +28,25 @@ else:
     if "pooler.supabase.com:5432" in db_url:
         db_url = db_url.replace("pooler.supabase.com:5432", "pooler.supabase.com:6543")
 
-    # Fast 3-second connection timeout to avoid serverless function timeouts
-    connect_args["connect_timeout"] = 3
+    # Connection timeout (5s) to avoid hanging
+    connect_args["connect_timeout"] = 5
 
-    if "pooler.supabase.com" in db_url or os.environ.get("VERCEL") == "1" or "AWS_LAMBDA_FUNCTION_NAME" in os.environ:
-        engine_kwargs["poolclass"] = NullPool
-        connect_args["prepare_threshold"] = None
-    else:
-        engine_kwargs.setdefault("pool_size", 10)
-        engine_kwargs.setdefault("max_overflow", 20)
-        engine_kwargs.setdefault("pool_recycle", 1800)
+    # Always disable prepared statements on PgBouncer Transaction Pooler to eliminate prepared-statement collisions
+    connect_args["prepare_threshold"] = None
+
+    # TCP Keepalives keep socket alive across network boundaries and prevent cold TCP disconnects
+    connect_args["keepalives"] = 1
+    connect_args["keepalives_idle"] = 30
+    connect_args["keepalives_interval"] = 10
+    connect_args["keepalives_count"] = 5
+
+    # High-performance persistent connection pooling:
+    # Maintain warm connections across requests to eliminate repetitive 200-800ms TCP + SSL handshakes
+    engine_kwargs.setdefault("pool_size", 10)
+    engine_kwargs.setdefault("max_overflow", 20)
+    engine_kwargs.setdefault("pool_recycle", 300)
+    engine_kwargs.setdefault("pool_pre_ping", True)
+    engine_kwargs.setdefault("pool_timeout", 10)
 
     # Pre-flight check: verify that the remote database is actually reachable and responsive
     try:
@@ -75,6 +84,7 @@ if is_sqlite:
             cursor.execute("PRAGMA synchronous=NORMAL")
             cursor.execute("PRAGMA cache_size=-64000")
             cursor.execute("PRAGMA temp_store=MEMORY")
+            cursor.execute("PRAGMA mmap_size=268435456")
             cursor.execute("PRAGMA busy_timeout=10000")
         except Exception:
             pass

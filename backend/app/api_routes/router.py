@@ -56,6 +56,13 @@ api_router.include_router(assessment_submissions_router)
 api_router.include_router(trainer_feedbacks_router)
 api_router.include_router(projects_router)
 
+@api_router.get("/health", summary="API v1 Health Check")
+def api_v1_health():
+    return {
+        "status": "healthy",
+        "api_version": "v1"
+    }
+
 @api_router.get("/system/time", summary="Standardized Platform Time Endpoint")
 
 
