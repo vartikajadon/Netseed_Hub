@@ -219,3 +219,4 @@ def run_migration(pg_url: str = None, sqlite_path: str = None):
 if __name__ == "__main__":
     url_arg = sys.argv[1] if len(sys.argv) > 1 else None
     run_migration(pg_url=url_arg)
+

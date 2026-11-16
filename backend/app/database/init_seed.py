@@ -98,10 +98,10 @@ def ensure_baseline_data(db: Session):
             if not p:
                 p = Program(
                     id=pid,
-                    name=p_name,
+                    title=p_name,
                     code=code,
                     description=desc,
-                    skills_covered=skills,
+                    skills=skills,
                     is_active=True,
                     is_curriculum_published=True
                 )
