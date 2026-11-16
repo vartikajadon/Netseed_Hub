@@ -9,8 +9,11 @@ if IS_SERVERLESS:
     DEFAULT_DB_FILE = os.path.join(tempfile.gettempdir(), "netlink_dev.db")
     # Copy pre-existing SQLite database to temp dir if it exists and temp DB doesn't exist
     bundled_db_candidates = [
+        os.path.join(BASE_DIR, "backend", "app", "database", "bundled_dev.db"),
+        os.path.join(BASE_DIR, "app", "database", "bundled_dev.db"),
         os.path.join(BASE_DIR, "netlink_dev.db"),
         os.path.join(BASE_DIR, "backend", "netlink_dev.db"),
+        os.path.join(os.path.dirname(BASE_DIR), "backend", "app", "database", "bundled_dev.db"),
         os.path.join(os.path.dirname(BASE_DIR), "backend", "netlink_dev.db"),
         os.path.join(os.path.dirname(BASE_DIR), "netlink_dev.db"),
     ]
