@@ -5,8 +5,9 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 IS_SERVERLESS = os.environ.get("VERCEL") == "1" or "AWS_LAMBDA_FUNCTION_NAME" in os.environ
 
 if IS_SERVERLESS:
-    DEFAULT_DB_FILE = "/tmp/netlink_dev.db"
-    # Copy pre-existing SQLite database to /tmp if it exists and /tmp DB doesn't exist
+    import tempfile
+    DEFAULT_DB_FILE = os.path.join(tempfile.gettempdir(), "netlink_dev.db")
+    # Copy pre-existing SQLite database to temp dir if it exists and temp DB doesn't exist
     bundled_db_candidates = [
         os.path.join(BASE_DIR, "netlink_dev.db"),
         os.path.join(BASE_DIR, "backend", "netlink_dev.db"),
@@ -43,6 +44,7 @@ class Settings(BaseSettings):
     PORT: int = 8000
     DEBUG: bool = True
     
+    SQLITE_DEFAULT_URL: str = SQLITE_DEFAULT_URL
     DATABASE_URL: str = SQLITE_DEFAULT_URL
     
     SUPABASE_URL: str = "https://your-project.supabase.co"

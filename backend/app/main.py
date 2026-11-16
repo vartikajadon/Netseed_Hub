@@ -139,12 +139,26 @@ def run_db_setup():
                     conn.commit()
                 except Exception:
                     try:
+                        conn.rollback()
                         raw_stmt = stmt.replace(" IF NOT EXISTS", "")
                         conn.execute(text(raw_stmt))
                         conn.commit()
                     except Exception:
-                        pass
+                        try:
+                            conn.rollback()
+                        except Exception:
+                            pass
         _setup_completed = True
+
+        # Ensure baseline users, batches, programs, and geofences are populated if empty
+        try:
+            from app.database.session import SessionLocal
+            from app.database.init_seed import ensure_baseline_data
+            db = SessionLocal()
+            ensure_baseline_data(db)
+            db.close()
+        except Exception as seed_err:
+            logger.warning(f"Baseline seed verification note: {seed_err}")
 
         # Safe automatic migration: ensure all enrolled face_templates in database are valid 512-d normalized templates
         try:
@@ -221,6 +235,13 @@ app.add_middleware(
 # Compression Middleware: automatically gzip compress JSON payloads >= 500 bytes for lightning-fast network delivery
 from starlette.middleware.gzip import GZipMiddleware
 app.add_middleware(GZipMiddleware, minimum_size=500)
+
+@app.middleware("http")
+async def db_setup_middleware(request: Request, call_next):
+    global _setup_completed
+    if not _setup_completed:
+        run_db_setup()
+    return await call_next(request)
 
 
 # Exception handlers

@@ -1,19 +1,23 @@
 import os
 import sys
 
-# Ensure root and backend directory are in sys.path
+# Ensure root and backend directory are in sys.path with backend prioritized
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BACKEND_DIR = os.path.join(ROOT_DIR, "backend")
 
 for path in [ROOT_DIR, BACKEND_DIR]:
-    if path not in sys.path:
-        sys.path.insert(0, path)
+    if path in sys.path:
+        sys.path.remove(path)
+
+# Insert ROOT_DIR then BACKEND_DIR so BACKEND_DIR is at index 0
+sys.path.insert(0, ROOT_DIR)
+sys.path.insert(0, BACKEND_DIR)
 
 try:
     try:
-        from backend.app.main import app
-    except ImportError:
         from app.main import app
+    except ImportError:
+        from backend.app.main import app
 except Exception as e:
     import json
     import traceback
