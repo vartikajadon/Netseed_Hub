@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import { Button } from './Button';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { KeyRound, Eye, EyeOff, CheckCircle2, AlertCircle, ShieldAlert } from 'lucide-react';
+import { KeyRound, Eye, EyeOff, CheckCircle2, AlertCircle, ShieldAlert, X } from 'lucide-react';
 
 export const FirstLoginPasswordModal: React.FC = () => {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, logout } = useAuth();
+  const navigate = useNavigate();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -18,6 +20,25 @@ export const FirstLoginPasswordModal: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  const handleCloseAndGoToLogin = async () => {
+    try {
+      await logout();
+    } catch {
+      // Fallback
+    }
+    navigate('/login');
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleCloseAndGoToLogin();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Show only if user is a student and must change their password
   if (!user || user.role !== 'STUDENT' || !user.must_change_password) {
@@ -82,7 +103,18 @@ export const FirstLoginPasswordModal: React.FC = () => {
       style={{ margin: 0, top: 0, left: 0, right: 0, bottom: 0 }}
     >
       <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-900/60 rounded-3xl shadow-2xl overflow-hidden p-6 sm:p-8 space-y-6 mx-auto my-auto">
-        <div className="flex items-center gap-4">
+        {/* Cross Icon button to return to login page */}
+        <button
+          type="button"
+          onClick={handleCloseAndGoToLogin}
+          className="absolute top-5 right-5 sm:top-6 sm:right-6 p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800 transition-colors shrink-0 z-10"
+          aria-label="Go back to login page"
+          title="Go back to login page"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        <div className="flex items-center gap-4 pr-10">
           <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 border border-indigo-500/30 shadow-inner">
             <KeyRound className="w-7 h-7" />
           </div>
