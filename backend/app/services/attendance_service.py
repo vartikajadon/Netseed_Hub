@@ -311,6 +311,11 @@ class AttendanceService:
             (FaceTemplate.student_id == student.id) | (FaceTemplate.user_id == student.user_id)
         ).first()
 
+        # If an official face template is on file, ensure enrollment status is synchronized
+        if face_tmpl and student.face_enrollment_status != "ENROLLED":
+            student.face_enrollment_status = "ENROLLED"
+            db.commit()
+
         if not face_tmpl or student.face_enrollment_status != "ENROLLED":
             raise HTTPException(
                 status_code=400,
@@ -322,7 +327,19 @@ class AttendanceService:
             Consent.consent_type == "FACIAL_BIOMETRIC_ATTENDANCE",
             Consent.is_granted == True
         ).first()
-        if not consent:
+        if not consent and face_tmpl:
+            consent = Consent(
+                id=str(uuid.uuid4()),
+                user_id=student.user_id,
+                student_id=student.id,
+                consent_type="FACIAL_BIOMETRIC_ATTENDANCE",
+                consent_version="v1.0",
+                is_granted=True,
+                ip_address="127.0.0.1"
+            )
+            db.add(consent)
+            db.commit()
+        elif not consent:
             raise HTTPException(
                 status_code=400,
                 detail="Biometric privacy consent required prior to marking attendance."

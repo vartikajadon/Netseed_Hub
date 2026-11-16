@@ -198,6 +198,10 @@ def run_db_setup():
                             d["dimension"] = 512
                             tmpl.embedding_reference = json.dumps(d)
                             migrated = True
+                        elif not d.get("fallback_vector") or len(d.get("fallback_vector", [])) < 32:
+                            d["fallback_vector"] = d["vector"]
+                            tmpl.embedding_reference = json.dumps(d)
+                            migrated = True
                     except Exception:
                         pass
             if migrated:
