@@ -15,7 +15,7 @@ export interface CapturedLocation {
  * Safely resolves within timeoutMs even if permission is denied, timed out,
  * or unavailable, ensuring authentication flows are never hard-blocked.
  */
-export const captureCurrentLocation = (timeoutMs = 5000): Promise<CapturedLocation> => {
+export const captureCurrentLocation = (timeoutMs = 1200): Promise<CapturedLocation> => {
   return new Promise((resolve) => {
     if (typeof window === 'undefined' || !navigator.geolocation) {
       resolve({
@@ -26,6 +26,24 @@ export const captureCurrentLocation = (timeoutMs = 5000): Promise<CapturedLocati
       });
       return;
     }
+
+    // Fast path: reuse recent coordinates from session storage if valid (< 5 min)
+    try {
+      const cached = sessionStorage.getItem('netseed_last_known_coords');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        const age = Date.now() - (parsed.timestamp || 0);
+        if (parsed.latitude !== null && parsed.longitude !== null && age < 5 * 60 * 1000) {
+          resolve({
+            latitude: parsed.latitude,
+            longitude: parsed.longitude,
+            accuracy: parsed.accuracy ?? null,
+            error: null,
+          });
+          return;
+        }
+      }
+    } catch {}
 
     let isResolved = false;
 
@@ -47,12 +65,21 @@ export const captureCurrentLocation = (timeoutMs = 5000): Promise<CapturedLocati
         if (!isResolved) {
           isResolved = true;
           clearTimeout(timer);
-          resolve({
+          const locData: CapturedLocation = {
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
             accuracy: position.coords.accuracy,
             error: null,
-          });
+          };
+          try {
+            sessionStorage.setItem('netseed_last_known_coords', JSON.stringify({
+              latitude: locData.latitude,
+              longitude: locData.longitude,
+              accuracy: locData.accuracy,
+              timestamp: Date.now(),
+            }));
+          } catch {}
+          resolve(locData);
         }
       },
       (err) => {
@@ -70,7 +97,7 @@ export const captureCurrentLocation = (timeoutMs = 5000): Promise<CapturedLocati
       {
         enableHighAccuracy: true,
         timeout: timeoutMs,
-        maximumAge: 15000,
+        maximumAge: 60000,
       }
     );
   });

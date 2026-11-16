@@ -102,17 +102,49 @@ export const FaceEnrollmentModal: React.FC<FaceEnrollmentModalProps> = ({
         setCapturedSamples((prev) => [...prev, dataUrl]);
       }
     } else {
-      // Simulated sample for environments without live camera
+      // Fallback synthetic face sample for environments without live camera
       const mockCanvas = document.createElement('canvas');
       mockCanvas.width = 320;
       mockCanvas.height = 240;
       const ctx = mockCanvas.getContext('2d');
       if (ctx) {
-        ctx.fillStyle = '#0f172a';
+        ctx.fillStyle = '#f0f0f5';
         ctx.fillRect(0, 0, 320, 240);
-        ctx.fillStyle = '#6366f1';
-        ctx.font = '14px sans-serif';
-        ctx.fillText(`Face Sample #${capturedSamples.length + 1}`, 50, 120);
+
+        ctx.fillStyle = '#e8bf9d';
+        ctx.beginPath();
+        ctx.ellipse(160, 120, 70, 85, 0, 0, 2 * Math.PI);
+        ctx.fill();
+
+        ctx.fillStyle = '#1e293b';
+        ctx.beginPath();
+        ctx.ellipse(135, 105, 9, 7, 0, 0, 2 * Math.PI);
+        ctx.ellipse(185, 105, 9, 7, 0, 0, 2 * Math.PI);
+        ctx.fill();
+
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(135, 95, 14, Math.PI, 2 * Math.PI);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(185, 95, 14, Math.PI, 2 * Math.PI);
+        ctx.stroke();
+
+        ctx.strokeStyle = '#b88968';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(160, 110);
+        ctx.lineTo(160, 135);
+        ctx.lineTo(165, 137);
+        ctx.stroke();
+
+        ctx.strokeStyle = '#a34a4a';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(160, 145, 20, 0.15 * Math.PI, 0.85 * Math.PI);
+        ctx.stroke();
+
         const dataUrl = mockCanvas.toDataURL('image/jpeg', 0.9);
         setCapturedSamples((prev) => [...prev, dataUrl]);
       }

@@ -11,10 +11,7 @@ if PARENT_DIR not in sys.path:
     sys.path.insert(0, PARENT_DIR)
 
 try:
-    try:
-        from app.main import app
-    except ImportError:
-        from backend.app.main import app
+    from app.main import app
 except Exception as e:
     import json
     import traceback
@@ -22,15 +19,7 @@ except Exception as e:
     print(f"CRITICAL STARTUP ERROR in backend/api/index.py:\n{error_trace}")
 
     async def app(scope, receive, send):
-        if scope["type"] == "lifespan":
-            while True:
-                message = await receive()
-                if message["type"] == "lifespan.startup":
-                    await send({"type": "lifespan.startup.complete"})
-                elif message["type"] == "lifespan.shutdown":
-                    await send({"type": "lifespan.shutdown.complete"})
-                    return
-        elif scope["type"] == "http":
+        if scope["type"] == "http":
             payload = json.dumps({
                 "status": "error",
                 "message": "Backend initialization failed on startup.",
@@ -43,8 +32,6 @@ except Exception as e:
                 "headers": [
                     [b"content-type", b"application/json"],
                     [b"access-control-allow-origin", b"*"],
-                    [b"access-control-allow-methods", b"*"],
-                    [b"access-control-allow-headers", b"*"],
                 ],
             })
             await send({

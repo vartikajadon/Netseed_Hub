@@ -167,16 +167,30 @@ class AttendanceService:
         from app.services.face_verification_service import get_insightface_app
         model_name = "ArcFace-buffalo_s" if get_insightface_app() is not None else "Fallback-DCT-HOG"
 
+        fallback_vec = None
+        if face_samples and len(face_samples) > 0:
+            fallback_vec = FaceVerificationService.extract_fallback_centroid(face_samples)
+        elif face_image_base64:
+            img = FaceVerificationService.decode_image_base64(face_image_base64)
+            if img is not None:
+                faces = FaceVerificationService.detect_faces(img)
+                if faces:
+                    fallback_vec = FaceVerificationService.extract_pixel_fallback_embedding(img, faces[0])
+        if fallback_vec is None:
+            fallback_vec = vector
+
         embedding_ref = json.dumps({
             "vector": vector,
-            "fallback_vector": vector,
+            "fallback_vector": fallback_vec,
             "dimension": len(vector),
             "model_version": model_name,
             "sample_count": sample_count
         })
 
         # 4. Check if re-enrolling or first-time enrollment
-        face_tmpl = db.query(FaceTemplate).filter(FaceTemplate.student_id == student.id).first()
+        face_tmpl = db.query(FaceTemplate).filter(
+            (FaceTemplate.student_id == student.id) | (FaceTemplate.user_id == student.user_id)
+        ).first()
         is_re_enrollment = face_tmpl is not None
 
         if not face_tmpl:
@@ -199,6 +213,8 @@ class AttendanceService:
             face_tmpl.enrolled_by = actor_id
             face_tmpl.enrolled_at = datetime.utcnow()
             face_tmpl.consent_id = consent.id
+            face_tmpl.student_id = student.id
+            face_tmpl.user_id = student.user_id
 
         # Update student face enrollment status
         student.face_enrollment_status = "ENROLLED"
@@ -298,7 +314,7 @@ class AttendanceService:
         if not face_tmpl or student.face_enrollment_status != "ENROLLED":
             raise HTTPException(
                 status_code=400,
-                detail="Face baseline not enrolled. Only students with an enrolled face template can mark attendance. Please complete face enrollment before marking attendance."
+                detail="Face baseline not enrolled. Only students with an HR-enrolled face template can mark attendance. Please contact your HR administrator to complete your facial biometric registration."
             )
 
         consent = db.query(Consent).filter(

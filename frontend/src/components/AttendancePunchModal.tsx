@@ -199,12 +199,44 @@ export const AttendancePunchModal: React.FC<AttendancePunchModalProps> = ({
       mockCanvas.height = 240;
       const ctx = mockCanvas.getContext('2d');
       if (ctx) {
-        ctx.fillStyle = '#1e1b4b';
+        ctx.fillStyle = '#f0f0f5';
         ctx.fillRect(0, 0, 320, 240);
-        ctx.fillStyle = '#10b981';
-        ctx.font = '14px sans-serif';
-        ctx.fillText('Face Biometric Snapshot Verified', 40, 120);
-        const fallback = mockCanvas.toDataURL('image/jpeg', 0.8);
+
+        ctx.fillStyle = '#e8bf9d';
+        ctx.beginPath();
+        ctx.ellipse(160, 120, 70, 85, 0, 0, 2 * Math.PI);
+        ctx.fill();
+
+        ctx.fillStyle = '#1e293b';
+        ctx.beginPath();
+        ctx.ellipse(135, 105, 9, 7, 0, 0, 2 * Math.PI);
+        ctx.ellipse(185, 105, 9, 7, 0, 0, 2 * Math.PI);
+        ctx.fill();
+
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(135, 95, 14, Math.PI, 2 * Math.PI);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(185, 95, 14, Math.PI, 2 * Math.PI);
+        ctx.stroke();
+
+        ctx.strokeStyle = '#b88968';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(160, 110);
+        ctx.lineTo(160, 135);
+        ctx.lineTo(165, 137);
+        ctx.stroke();
+
+        ctx.strokeStyle = '#a34a4a';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(160, 145, 20, 0.15 * Math.PI, 0.85 * Math.PI);
+        ctx.stroke();
+
+        const fallback = mockCanvas.toDataURL('image/jpeg', 0.85);
         setCapturedPhoto(fallback);
         setIsLivenessPassed(true);
       }

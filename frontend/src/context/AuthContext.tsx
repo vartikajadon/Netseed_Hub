@@ -46,10 +46,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       let activeToken: string | null = localStorage.getItem('access_token');
 
-      // 1. Check Supabase auth session only if no activeToken is already cached
+      // 1. Check Supabase auth session only if no activeToken is already cached (with 1s timeout guard)
       if (!activeToken && isSupabaseConfigured()) {
         try {
-          const { data: { session } } = await supabase.auth.getSession();
+          const sessionPromise = supabase.auth.getSession();
+          const timeoutPromise = new Promise<{ data: { session: null } }>((resolve) =>
+            setTimeout(() => resolve({ data: { session: null } }), 1000)
+          );
+          const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
           if (session?.access_token) {
             activeToken = session.access_token;
           }
@@ -109,8 +113,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password?: string): Promise<User> => {
     setIsLoading(true);
     try {
-      // 1. Capture user geolocation at login (resilient fallback with timeout)
-      const loc = await captureCurrentLocation(5000);
+      // 1. Capture user geolocation at login (snappy fallback with 1000ms timeout)
+      const loc = await captureCurrentLocation(1000);
 
       // 2. Authenticate against Backend API with captured location
       const authResult = await api.post<{ access_token: string; user: User }>('/auth/login', {
@@ -129,16 +133,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('access_token', newToken);
       localStorage.setItem('user_data', JSON.stringify(loggedUser));
 
-      // Attempt Supabase auth sign-in if live instance configured
+      // Attempt Supabase auth sign-in asynchronously in background without blocking UI
       if (isSupabaseConfigured()) {
-        try {
-          await supabase.auth.signInWithPassword({
-            email,
-            password: password || 'default_password',
-          });
-        } catch {
+        supabase.auth.signInWithPassword({
+          email,
+          password: password || 'default_password',
+        }).catch(() => {
           // Dev mode fallback
-        }
+        });
       }
 
       return loggedUser;
@@ -150,8 +152,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async () => {
     setIsLoading(true);
     try {
-      // 1. Capture user geolocation at logout (resilient fallback with timeout)
-      const loc = await captureCurrentLocation(4000);
+      // 1. Capture user geolocation at logout (quick non-blocking 600ms timeout)
+      const loc = await captureCurrentLocation(600);
 
       try {
         await api.post('/auth/logout', {
@@ -162,10 +164,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch {
         // Ignore network errors on logout
       }
-      try {
-        await supabase.auth.signOut();
-      } catch {
-        // Ignore Supabase signout errors
+      if (isSupabaseConfigured()) {
+        supabase.auth.signOut().catch(() => {});
       }
     } finally {
       setUser(null);

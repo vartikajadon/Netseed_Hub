@@ -40,6 +40,8 @@ export const StudentDashboard: React.FC = () => {
   const [attendanceSummary, setAttendanceSummary] = useState<StudentAttendanceSummary | null>(null);
   const [isPunchModalOpen, setIsPunchModalOpen] = useState(false);
   const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
+  const [isReEnrollHelpOpen, setIsReEnrollHelpOpen] = useState(false);
+  const [isNotEnrolledNoticeOpen, setIsNotEnrolledNoticeOpen] = useState(false);
 
   // No Dues Form Popup State
   const [activeNoDues, setActiveNoDues] = useState<NoDuesRequest | null>(null);
@@ -234,23 +236,39 @@ export const StudentDashboard: React.FC = () => {
             </p>
           </div>
 
-          <Button
-            variant="primary"
-            size="lg"
-            onClick={() => {
-              if (student && student.face_enrollment_status !== 'ENROLLED') {
-                setIsEnrollModalOpen(true);
-              } else {
-                setIsPunchModalOpen(true);
-              }
-            }}
-            className="flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold shadow-md shadow-emerald-500/20 border border-emerald-400/30 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl transition-all w-full sm:w-auto"
-          >
-            <Camera className="w-5 h-5 stroke-[2.5]" />
-            {student && student.face_enrollment_status !== 'ENROLLED'
-              ? 'Enroll Face Baseline First'
-              : 'Mark Attendance (Face Scanner)'}
-          </Button>
+          <div className="flex flex-col items-start sm:items-end gap-1.5 w-full sm:w-auto">
+            <Button
+              variant="primary"
+              size="lg"
+              onClick={() => {
+                if (student && student.face_enrollment_status !== 'ENROLLED') {
+                  setIsNotEnrolledNoticeOpen(true);
+                } else {
+                  setIsPunchModalOpen(true);
+                }
+              }}
+              className="flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold shadow-md shadow-emerald-500/20 border border-emerald-400/30 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl transition-all w-full sm:w-auto"
+            >
+              <Camera className="w-5 h-5 stroke-[2.5]" />
+              {student && student.face_enrollment_status !== 'ENROLLED'
+                ? 'Face Enrollment Pending (HR)'
+                : 'Mark Attendance (Face Scanner)'}
+            </Button>
+            {student && student.face_enrollment_status === 'ENROLLED' && (
+              <div className="flex items-center gap-2 px-1">
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-500/20">
+                  <ShieldCheck className="w-3.5 h-3.5" /> Face Baseline Enrolled
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsReEnrollHelpOpen(true)}
+                  className="text-[11px] text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 underline font-medium"
+                >
+                  Need re-enrollment?
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* ACTIVE NO DUES CLEARANCE POPUP NOTIFICATION BANNER */}
@@ -318,25 +336,22 @@ export const StudentDashboard: React.FC = () => {
         {student && student.face_enrollment_status !== 'ENROLLED' && (
           <div className="p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 rounded-xl">
+              <div className="p-2.5 bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 rounded-xl shrink-0">
                 <ShieldCheck className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="text-sm font-bold text-amber-900 dark:text-amber-200">Face Baseline Registration Required</h4>
+                <h4 className="text-sm font-bold text-amber-900 dark:text-amber-200">Face Baseline Registration Pending</h4>
                 <p className="text-xs text-amber-800 dark:text-slate-300 font-medium">
-                  Only registered students with an enrolled face template can mark attendance. Please register your unique facial baseline.
+                  Facial biometric registration is authorized and recorded exclusively by HR Administration. Once enrolled by HR, your biometric profile remains secure and active throughout your training.
                 </p>
               </div>
             </div>
-            <Button
-              type="button"
-              variant="primary"
-              size="sm"
-              onClick={() => setIsEnrollModalOpen(true)}
-              className="bg-amber-600 hover:bg-amber-700 text-white font-semibold shrink-0"
+            <a
+              href={`mailto:hr@netlink.org?subject=Biometric%20Face%20Enrollment%20Request%20-%20${encodeURIComponent(student?.user?.full_name || student?.roll_number || 'Trainee')}%20(${student?.roll_number})&body=Hello%20HR%20Team,%0D%0A%0D%0APlease%20schedule%20my%20initial%20biometric%20face%20baseline%20enrollment%20so%20I%20can%20mark%20daily%20attendance.%0D%0A%0D%0AName:%20${encodeURIComponent(student?.user?.full_name || '')}%0D%0ARoll%20Number:%20${student?.roll_number}`}
+              className="inline-flex items-center justify-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs px-3.5 py-2 rounded-xl shrink-0 transition-colors shadow-xs"
             >
-              Enroll My Face Now
-            </Button>
+              <Mail className="w-3.5 h-3.5" /> Request HR Enrollment
+            </a>
           </div>
         )}
 
@@ -378,40 +393,64 @@ export const StudentDashboard: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs pt-2 border-t border-slate-200 dark:border-slate-800/80">
-                  <div className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800">
-                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400 block mb-1">Total Working Hours</span>
-                    <span className="font-mono text-indigo-600 dark:text-indigo-300 font-bold text-sm">
-                      {attendanceSummary.total_working_hours} hrs
-                    </span>
-                  </div>
-
-                  <div className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800">
-                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400 block mb-1">Punch IN Status</span>
-                    <span className={`font-mono font-bold text-xs ${hasPunchedIn ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>
-                      {attendanceSummary.first_punch_in
-                        ? formatLocalTime(attendanceSummary.first_punch_in)
-                        : 'Not Checked In'}
-                    </span>
-                  </div>
-
-                  <div className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800">
-                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400 block mb-1">Punch OUT Status</span>
-                    <span className={`font-mono font-bold text-xs ${hasPunchedOut ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`}>
-                      {attendanceSummary.last_punch_out
-                        ? formatLocalTime(attendanceSummary.last_punch_out)
-                        : 'Not Checked Out'}
-                    </span>
-                  </div>
-
-                  <div className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800">
-                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400 block mb-1 flex items-center gap-1">
-                      <MapPin className="w-3.5 h-3.5 text-rose-500" /> Geofence Rule
-                    </span>
-                    <span className="text-slate-900 dark:text-slate-200 font-semibold text-xs">
-                      Netlink Bhopal Campus
-                    </span>
-                  </div>
+                <div className="overflow-x-auto pt-2 border-t border-slate-200 dark:border-slate-800/80">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold bg-slate-50/60 dark:bg-slate-950/40">
+                        <th className="py-2.5 px-3">Attendance KPI</th>
+                        <th className="py-2.5 px-3">Recorded Time / Metric</th>
+                        <th className="py-2.5 px-3">Details & Policy</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-sans">
+                      <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                        <td className="py-2.5 px-3 font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-indigo-500" /> Total Working Hours
+                        </td>
+                        <td className="py-2.5 px-3 font-mono font-bold text-indigo-600 dark:text-indigo-400 text-sm">
+                          {attendanceSummary.total_working_hours} hrs
+                        </td>
+                        <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400">
+                          Target: 5:00 hrs for Present status ({attendanceSummary.total_working_minutes || 0} mins logged)
+                        </td>
+                      </tr>
+                      <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                        <td className="py-2.5 px-3 font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> Check-In (Punch IN)
+                        </td>
+                        <td className={`py-2.5 px-3 font-mono font-bold text-xs ${hasPunchedIn ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>
+                          {attendanceSummary.first_punch_in ? formatLocalTime(attendanceSummary.first_punch_in) : 'Not Checked In'}
+                        </td>
+                        <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400">
+                          {hasPunchedIn ? 'Verified via facial recognition' : 'Pending morning punch-in'}
+                        </td>
+                      </tr>
+                      <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                        <td className="py-2.5 px-3 font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-amber-500" /> Check-Out (Punch OUT)
+                        </td>
+                        <td className={`py-2.5 px-3 font-mono font-bold text-xs ${hasPunchedOut ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`}>
+                          {attendanceSummary.last_punch_out ? formatLocalTime(attendanceSummary.last_punch_out) : 'Not Checked Out'}
+                        </td>
+                        <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400">
+                          {hasPunchedOut ? 'Recorded at shift completion' : 'Required upon leaving campus'}
+                        </td>
+                      </tr>
+                      <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                        <td className="py-2.5 px-3 font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                          <MapPin className="w-3.5 h-3.5 text-rose-500" /> Geofence Verification
+                        </td>
+                        <td className="py-2.5 px-3 font-semibold text-slate-900 dark:text-slate-200">
+                          Netlink Bhopal Campus
+                        </td>
+                        <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400">
+                          {attendanceSummary.geofence_distance_meters != null
+                            ? `Location verified (${Math.round(attendanceSummary.geofence_distance_meters)}m from office center)`
+                            : 'Within 100m designated campus perimeter'}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}
@@ -421,25 +460,35 @@ export const StudentDashboard: React.FC = () => {
               {/* Profile Info */}
               <Card title="Student Profile" subtitle="Registration & Roll Details">
                 {student ? (
-                  <div className="space-y-3 text-sm">
-                    <div>
-                      <span className="text-xs font-medium text-slate-500 dark:text-slate-400 block">Roll Number</span>
-                      <span className="font-semibold text-indigo-600 dark:text-indigo-300">{student.roll_number}</span>
-                    </div>
-                    <div>
-                      <span className="text-xs font-medium text-slate-500 dark:text-slate-400 block">College</span>
-                      <span className="text-slate-900 dark:text-slate-100 font-medium">{student.college_name || 'N/A'}</span>
-                    </div>
-                    <div>
-                      <span className="text-xs font-medium text-slate-500 dark:text-slate-400 block">Qualification</span>
-                      <span className="text-slate-900 dark:text-slate-100 font-medium">{student.qualification || 'N/A'}</span>
-                    </div>
-                    <div className="pt-2 flex items-center justify-between border-t border-slate-100 dark:border-slate-800">
-                      <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Status</span>
-                      <Badge variant={student.enrollment_status === 'ACTIVE' ? 'success' : 'info'}>
-                        {student.enrollment_status}
-                      </Badge>
-                    </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-sans">
+                        <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                          <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400 font-medium">Roll Number</td>
+                          <td className="py-2.5 px-3 font-mono font-bold text-indigo-600 dark:text-indigo-400 text-right">{student.roll_number}</td>
+                        </tr>
+                        <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                          <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400 font-medium">College</td>
+                          <td className="py-2.5 px-3 font-medium text-slate-900 dark:text-slate-100 text-right">{student.college_name || 'N/A'}</td>
+                        </tr>
+                        <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                          <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400 font-medium">Qualification</td>
+                          <td className="py-2.5 px-3 font-medium text-slate-900 dark:text-slate-100 text-right">{student.qualification || 'N/A'}</td>
+                        </tr>
+                        <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                          <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400 font-medium">Program / Batch</td>
+                          <td className="py-2.5 px-3 font-medium text-slate-900 dark:text-slate-100 text-right">{student.program?.title || 'Assigned Program'}</td>
+                        </tr>
+                        <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                          <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400 font-medium">Enrollment Status</td>
+                          <td className="py-2.5 px-3 text-right">
+                            <Badge variant={student.enrollment_status === 'ACTIVE' || student.enrollment_status === 'ENROLLED' ? 'success' : 'info'}>
+                              {student.enrollment_status}
+                            </Badge>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
                 ) : (
                   <p className="text-xs text-slate-500 dark:text-slate-400">No student profile record found for user {user?.email}</p>
@@ -448,78 +497,99 @@ export const StudentDashboard: React.FC = () => {
 
               {/* Mark Attendance Section & Single Daily Punch Control */}
               <Card title="Mark Attendance" subtitle="Daily Punch Controls & Rules">
-                <div className="space-y-3.5 text-xs">
-                  <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-500/30 rounded-xl space-y-1">
-                    <div className="flex items-center gap-1.5 font-bold text-indigo-700 dark:text-indigo-300">
-                      <Globe className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                      Google Server Time Enforced
-                    </div>
-                    <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed font-medium">
-                      Machine local time manipulation is disabled. Timestamps are retrieved directly from Google UTC server clocks.
-                    </p>
+                <div className="space-y-3">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-sans">
+                        <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                          <td className="py-2.5 px-2.5 text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5">
+                            <Globe className="w-3.5 h-3.5 text-indigo-500" /> Clock Authority
+                          </td>
+                          <td className="py-2.5 px-2.5 font-semibold text-slate-900 dark:text-slate-100 text-right">
+                            Google UTC Server Time
+                          </td>
+                        </tr>
+                        <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                          <td className="py-2.5 px-2.5 text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5">
+                            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" /> Daily Allowance
+                          </td>
+                          <td className="py-2.5 px-2.5 text-right">
+                            <span className="text-[10px] font-bold uppercase tracking-wider bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 px-2 py-0.5 rounded-md">
+                              1 IN & 1 OUT Max
+                            </span>
+                          </td>
+                        </tr>
+                        <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                          <td className="py-2.5 px-2.5 text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5 text-slate-400" /> Biometric Check
+                          </td>
+                          <td className="py-2.5 px-2.5 font-medium text-slate-700 dark:text-slate-300 text-right">
+                            Facial Liveness Verified
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
 
-                  <div className="p-3 bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-900 dark:text-slate-100">Daily Punch Rule</span>
-                      <span className="text-[10px] font-bold uppercase tracking-wider bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 px-2 py-0.5 rounded-md">
-                        1 IN & 1 OUT Max
-                      </span>
-                    </div>
-                    <p className="text-slate-600 dark:text-slate-400 text-[11px] font-medium">
-                      Only one Punch IN and one Punch OUT can be recorded per student per day.
-                    </p>
-
-                    <div className="pt-2 flex flex-col gap-2">
-                      <Button
-                        type="button"
-                        variant="primary"
-                        size="md"
-                        onClick={() => setIsPunchModalOpen(true)}
-                        disabled={hasPunchedIn && hasPunchedOut}
-                        className={`w-full font-bold flex items-center justify-center gap-2 ${
-                          hasPunchedIn && hasPunchedOut
-                            ? 'bg-slate-300 dark:bg-slate-800 text-slate-500 border-none cursor-not-allowed'
-                            : 'bg-indigo-600 hover:bg-indigo-500 text-white'
-                        }`}
-                      >
-                        <Camera className="w-4 h-4" />
-                        {hasPunchedIn && hasPunchedOut
-                          ? 'Attendance Completed for Today'
-                          : hasPunchedIn
-                          ? 'Mark Punch OUT Now'
-                          : 'Mark Punch IN Now'}
-                      </Button>
-                    </div>
-                  </div>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="md"
+                    onClick={() => setIsPunchModalOpen(true)}
+                    disabled={hasPunchedIn && hasPunchedOut}
+                    className={`w-full font-bold flex items-center justify-center gap-2 ${
+                      hasPunchedIn && hasPunchedOut
+                        ? 'bg-slate-300 dark:bg-slate-800 text-slate-500 border-none cursor-not-allowed'
+                        : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                    }`}
+                  >
+                    <Camera className="w-4 h-4" />
+                    {hasPunchedIn && hasPunchedOut
+                      ? 'Attendance Completed for Today'
+                      : hasPunchedIn
+                      ? 'Mark Punch OUT Now'
+                      : 'Mark Punch IN Now'}
+                  </Button>
                 </div>
               </Card>
 
               {/* Biometric Consent */}
               <Card title="Biometric Consent Status" subtitle="Privacy & Audit Compliance">
-                <div className="space-y-3 text-sm">
-                  <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
-                    <div className="flex items-center gap-2">
-                      <ShieldCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                      <div>
-                        <div className="text-xs font-bold text-slate-900 dark:text-slate-100">Facial Biometric</div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Consent v1.0</div>
-                      </div>
-                    </div>
-                    <Badge variant={consents.some((c) => c.is_granted) ? 'success' : 'neutral'}>
-                      {consents.some((c) => c.is_granted) ? 'GRANTED' : 'NOT RECORDED'}
-                    </Badge>
-                  </div>
-
-                  <div className="p-3 bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-500/20 rounded-xl">
-                    <div className="flex items-center gap-2 text-xs font-bold text-indigo-700 dark:text-indigo-300 mb-1">
-                      <CheckCircle2 className="w-4 h-4" />
-                      Biometric Protection
-                    </div>
-                    <p className="text-xs text-indigo-900 dark:text-indigo-200/80 leading-relaxed font-medium">
-                      Raw face images are never stored. Only encrypted mathematical embedding templates are referenceable.
-                    </p>
-                  </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-sans">
+                      <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                        <td className="py-2.5 px-2.5 text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5">
+                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" /> Biometric Consent
+                        </td>
+                        <td className="py-2.5 px-2.5 font-medium text-slate-900 dark:text-slate-200">v1.0 Form</td>
+                        <td className="py-2.5 px-2.5 text-right">
+                          <Badge variant={consents.some((c) => c.is_granted) ? 'success' : 'neutral'}>
+                            {consents.some((c) => c.is_granted) ? 'GRANTED' : 'NOT RECORDED'}
+                          </Badge>
+                        </td>
+                      </tr>
+                      <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                        <td className="py-2.5 px-2.5 text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-indigo-500" /> Face Baseline
+                        </td>
+                        <td className="py-2.5 px-2.5 font-medium text-slate-900 dark:text-slate-200">HR Registered</td>
+                        <td className="py-2.5 px-2.5 text-right">
+                          <Badge variant={student?.face_enrollment_status === 'ENROLLED' ? 'success' : 'warning'}>
+                            {student?.face_enrollment_status || 'NOT ENROLLED'}
+                          </Badge>
+                        </td>
+                      </tr>
+                      <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                        <td className="py-2.5 px-2.5 text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5">
+                          <Globe className="w-3.5 h-3.5 text-slate-400" /> Image Policy
+                        </td>
+                        <td className="py-2.5 px-2.5 text-slate-700 dark:text-slate-300" colSpan={2}>
+                          Zero raw photos stored; encrypted templates only
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </Card>
             </div>
@@ -532,57 +602,75 @@ export const StudentDashboard: React.FC = () => {
                 subtitle="Payment Records & Balance"
               >
                 {feeSummary ? (
-                  <div className="space-y-3.5 text-xs">
-                    <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
-                      <div>
-                        <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Payment Status</span>
-                        <div className="mt-0.5">
-                          <Badge variant={
-                            feeSummary.payment_status === 'PAID' ? 'success' :
-                            feeSummary.payment_status === 'PARTIAL' ? 'warning' : 'error'
-                          }>
-                            {feeSummary.payment_status}
-                          </Badge>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Remaining Due</span>
-                        <div className="font-mono font-bold text-sm text-rose-600 dark:text-rose-400">
-                          ₹{feeSummary.remaining_fees.toLocaleString('en-IN')}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 text-[11px]">
-                      <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
-                        <span className="text-slate-500 dark:text-slate-400 block">Total Tuition Fee</span>
-                        <span className="font-mono font-bold text-slate-900 dark:text-slate-100 text-xs">
-                          ₹{feeSummary.total_fees.toLocaleString('en-IN')}
-                        </span>
-                      </div>
-                      <div className="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
-                        <span className="text-emerald-700 dark:text-emerald-300 block">Total Amount Paid</span>
-                        <span className="font-mono font-bold text-emerald-800 dark:text-emerald-200 text-xs">
-                          ₹{feeSummary.total_paid.toLocaleString('en-IN')}
-                        </span>
-                      </div>
+                  <div className="space-y-4 text-xs">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead>
+                          <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold bg-slate-50/60 dark:bg-slate-950/40">
+                            <th className="py-2.5 px-3">Fee Metric</th>
+                            <th className="py-2.5 px-3 text-right">Amount / Details</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-sans">
+                          <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                            <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400 font-medium">Payment Status</td>
+                            <td className="py-2.5 px-3 text-right">
+                              <Badge variant={
+                                feeSummary.payment_status === 'PAID' ? 'success' :
+                                feeSummary.payment_status === 'PARTIAL' ? 'warning' : 'error'
+                              }>
+                                {feeSummary.payment_status}
+                              </Badge>
+                            </td>
+                          </tr>
+                          <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                            <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400 font-medium">Total Program Fee</td>
+                            <td className="py-2.5 px-3 font-mono font-bold text-slate-900 dark:text-slate-100 text-right">
+                              ₹{feeSummary.total_fees.toLocaleString('en-IN')}
+                            </td>
+                          </tr>
+                          <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                            <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400 font-medium">Total Paid</td>
+                            <td className="py-2.5 px-3 font-mono font-bold text-emerald-600 dark:text-emerald-400 text-right">
+                              ₹{feeSummary.total_paid.toLocaleString('en-IN')}
+                            </td>
+                          </tr>
+                          <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                            <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400 font-medium">Remaining Due</td>
+                            <td className="py-2.5 px-3 font-mono font-bold text-rose-600 dark:text-rose-400 text-right">
+                              ₹{feeSummary.remaining_fees.toLocaleString('en-IN')}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
 
                     {feeSummary.payments && feeSummary.payments.length > 0 && (
-                      <div className="space-y-1.5 pt-1 border-t border-slate-200 dark:border-slate-800">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-1.5">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block px-1">
                           Recent Receipts ({feeSummary.payments.length})
                         </span>
-                        <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
-                          {feeSummary.payments.slice(0, 3).map(p => (
-                            <div key={p.id} className="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px]">
-                              <div>
-                                <span className="font-semibold text-slate-900 dark:text-slate-100">₹{p.amount_paid.toLocaleString('en-IN')}</span>
-                                <span className="text-[10px] text-slate-500 ml-1.5">{p.payment_mode}</span>
-                              </div>
-                              <span className="font-mono text-[10px] text-slate-500">{p.payment_date}</span>
-                            </div>
-                          ))}
+                        <div className="overflow-x-auto max-h-36 overflow-y-auto">
+                          <table className="w-full text-left text-xs">
+                            <thead>
+                              <tr className="border-b border-slate-200 dark:border-slate-800 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold bg-slate-50/60 dark:bg-slate-950/40">
+                                <th className="py-2 px-2.5">Date</th>
+                                <th className="py-2 px-2.5">Mode</th>
+                                <th className="py-2 px-2.5 text-right">Amount Paid</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-sans">
+                              {feeSummary.payments.slice(0, 5).map(p => (
+                                <tr key={p.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                                  <td className="py-2 px-2.5 font-mono text-[11px] text-slate-500 dark:text-slate-400">{p.payment_date}</td>
+                                  <td className="py-2 px-2.5 text-[11px] text-slate-700 dark:text-slate-300 font-medium">{p.payment_mode}</td>
+                                  <td className="py-2 px-2.5 font-mono font-bold text-slate-900 dark:text-slate-100 text-right text-xs">
+                                    ₹{p.amount_paid.toLocaleString('en-IN')}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
                         </div>
                       </div>
                     )}
@@ -601,39 +689,45 @@ export const StudentDashboard: React.FC = () => {
                 subtitle="Issued Documents & Notices"
               >
                 {myLetters.length > 0 ? (
-                  <div className="space-y-2">
-                    {myLetters.map(letter => (
-                      <div
-                        key={letter.id}
-                        className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 hover:border-indigo-400 transition-colors flex items-center justify-between gap-2 text-xs"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <Mail className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                            <span className="font-bold text-slate-900 dark:text-slate-100 truncate">{letter.title}</span>
-                          </div>
-                          <div className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-0.5">
-                            <span>{letter.letter_type}</span>
-                            <span>•</span>
-                            <span>{letter.issue_date}</span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <Badge variant={letter.status === 'ACKNOWLEDGED' ? 'success' : 'warning'}>
-                            {letter.status}
-                          </Badge>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => setSelectedLetter(letter)}
-                            className="px-2 py-1 text-[11px]"
-                          >
-                            View
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold bg-slate-50/60 dark:bg-slate-950/40">
+                          <th className="py-2.5 px-3">Letter Title</th>
+                          <th className="py-2.5 px-3">Type & Date</th>
+                          <th className="py-2.5 px-3">Status</th>
+                          <th className="py-2.5 px-3 text-right">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-sans">
+                        {myLetters.map(letter => (
+                          <tr key={letter.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                            <td className="py-2.5 px-3 font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                              <Mail className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                              <span className="truncate max-w-[130px]">{letter.title}</span>
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400 text-[11px]">
+                              {letter.letter_type} • {letter.issue_date}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <Badge variant={letter.status === 'ACKNOWLEDGED' ? 'success' : 'warning'}>
+                                {letter.status}
+                              </Badge>
+                            </td>
+                            <td className="py-2.5 px-3 text-right">
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => setSelectedLetter(letter)}
+                                className="px-2 py-1 text-[11px]"
+                              >
+                                View
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 ) : (
                   <div className="py-6 text-center text-xs text-slate-500 dark:text-slate-400">
@@ -649,39 +743,45 @@ export const StudentDashboard: React.FC = () => {
                 subtitle="Verified Digital Credentials"
               >
                 {myCertificates.length > 0 ? (
-                  <div className="space-y-2">
-                    {myCertificates.map(cert => (
-                      <div
-                        key={cert.id}
-                        className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 hover:border-amber-400 transition-colors flex items-center justify-between gap-2 text-xs"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <Award className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                            <span className="font-bold text-slate-900 dark:text-slate-100 truncate">{cert.title}</span>
-                          </div>
-                          <div className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-0.5">
-                            <span className="font-mono text-indigo-600 dark:text-indigo-400">{cert.credential_id}</span>
-                            <span>•</span>
-                            <span>{cert.issue_date}</span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <Badge variant="success">
-                            {cert.status}
-                          </Badge>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => setSelectedCertificate(cert)}
-                            className="px-2 py-1 text-[11px]"
-                          >
-                            View
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold bg-slate-50/60 dark:bg-slate-950/40">
+                          <th className="py-2.5 px-3">Credential Title</th>
+                          <th className="py-2.5 px-3">ID & Date</th>
+                          <th className="py-2.5 px-3">Status</th>
+                          <th className="py-2.5 px-3 text-right">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-sans">
+                        {myCertificates.map(cert => (
+                          <tr key={cert.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                            <td className="py-2.5 px-3 font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                              <Award className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                              <span className="truncate max-w-[130px]">{cert.title}</span>
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400 text-[11px]">
+                              <span className="font-mono text-indigo-600 dark:text-indigo-400">{cert.credential_id}</span> • {cert.issue_date}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <Badge variant="success">
+                                {cert.status}
+                              </Badge>
+                            </td>
+                            <td className="py-2.5 px-3 text-right">
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => setSelectedCertificate(cert)}
+                                className="px-2 py-1 text-[11px]"
+                              >
+                                View
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 ) : (
                   <div className="py-6 text-center text-xs text-slate-500 dark:text-slate-400">
@@ -708,21 +808,63 @@ export const StudentDashboard: React.FC = () => {
             >
               {student?.project_title ? (
                 <div className="space-y-4">
-                  <div className="p-4 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200/80 dark:border-indigo-800/60 rounded-2xl space-y-2">
-                    <div className="flex items-center gap-2">
-                      <FolderGit2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
-                      <h4 className="font-bold text-slate-900 dark:text-slate-100 text-sm">
-                        {student.project_title}
-                      </h4>
-                    </div>
-                    {student.project_description && (
-                      <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed pl-6">
-                        {student.project_description}
-                      </p>
-                    )}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold bg-slate-50/60 dark:bg-slate-950/40">
+                          <th className="py-2.5 px-3">Project Specification</th>
+                          <th className="py-2.5 px-3 text-right">Details & Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-sans">
+                        <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                          <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400 font-medium">Project Title</td>
+                          <td className="py-2.5 px-3 font-bold text-slate-900 dark:text-slate-100 text-right">
+                            <span className="inline-flex items-center gap-1.5">
+                              <FolderGit2 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                              {student.project_title}
+                            </span>
+                          </td>
+                        </tr>
+                        {student.project_description && (
+                          <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                            <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400 font-medium align-top">Scope & Description</td>
+                            <td className="py-2.5 px-3 text-slate-600 dark:text-slate-300 text-right leading-relaxed max-w-md">
+                              {student.project_description}
+                            </td>
+                          </tr>
+                        )}
+                        <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                          <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400 font-medium">Review Status</td>
+                          <td className="py-2.5 px-3 text-right">
+                            <Badge variant={student.project_url ? 'success' : 'warning'}>
+                              {student.project_url ? 'Submission Received' : 'Pending Submission'}
+                            </Badge>
+                          </td>
+                        </tr>
+                        <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                          <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400 font-medium">Submitted Repository / URL</td>
+                          <td className="py-2.5 px-3 text-right">
+                            {student.project_url ? (
+                              <a
+                                href={student.project_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-indigo-600 dark:text-indigo-400 font-mono font-bold hover:underline inline-flex items-center gap-1"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                                {student.project_url}
+                              </a>
+                            ) : (
+                              <span className="text-slate-400 italic">No URL submitted yet</span>
+                            )}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
 
-                  <form onSubmit={handleSubmitProjectUrl} className="space-y-3">
+                  <form onSubmit={handleSubmitProjectUrl} className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-800">
                     <div>
                       <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                         Submit or Update Your Project Repository / Live URL (GitHub, GitLab, or Hosted URL) *
@@ -751,21 +893,6 @@ export const StudentDashboard: React.FC = () => {
                         Submitting here automatically synchronizes your link into your mentor's evaluation scoresheet.
                       </p>
                     </div>
-
-                    {student.project_url && (
-                      <div className="flex items-center gap-2 text-xs">
-                        <span className="text-slate-500 dark:text-slate-400">Current Submitted Link:</span>
-                        <a
-                          href={student.project_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-indigo-600 dark:text-indigo-400 font-mono font-bold hover:underline flex items-center gap-1"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                          {student.project_url}
-                        </a>
-                      </div>
-                    )}
 
                     {projectSubmitSuccess && (
                       <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded-xl text-xs flex items-center gap-2 font-medium">
@@ -812,49 +939,113 @@ export const StudentDashboard: React.FC = () => {
             >
               {myCurriculum ? (
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Completed Syllabus</span>
-                      <h4 className="text-xl font-black text-slate-900 dark:text-slate-100">
-                        {myCurriculum.completed_topics} <span className="text-xs font-semibold text-slate-400">/ {myCurriculum.total_topics} Topics</span>
-                      </h4>
-                    </div>
-                    <Badge variant={myCurriculum.completion_percentage === 100 ? 'success' : 'info'} className="text-xs font-bold px-3 py-1">
-                      {myCurriculum.completion_percentage}% Complete
-                    </Badge>
-                  </div>
-
-                  <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
-                    <div
-                      className="bg-indigo-600 dark:bg-indigo-500 h-2.5 rounded-full transition-all duration-700"
-                      style={{ width: `${Math.min(100, myCurriculum.completion_percentage)}%` }}
-                    />
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold bg-slate-50/60 dark:bg-slate-950/40">
+                          <th className="py-2.5 px-3">Curriculum Metric</th>
+                          <th className="py-2.5 px-3">Progress / Value</th>
+                          <th className="py-2.5 px-3 text-right">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-sans">
+                        <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                          <td className="py-2.5 px-3 font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                            <BookOpen className="w-3.5 h-3.5 text-indigo-500 shrink-0" /> Program Track
+                          </td>
+                          <td className="py-2.5 px-3 font-medium text-slate-700 dark:text-slate-300">
+                            {myCurriculum.program_title}
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
+                              {myCurriculum.program_code}
+                            </span>
+                          </td>
+                        </tr>
+                        <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                          <td className="py-2.5 px-3 font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" /> Completed Topics
+                          </td>
+                          <td className="py-2.5 px-3 font-mono font-bold text-slate-900 dark:text-slate-100">
+                            {myCurriculum.completed_topics} / {myCurriculum.total_topics} Topics
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                              {myCurriculum.total_topics - myCurriculum.completed_topics} Remaining
+                            </span>
+                          </td>
+                        </tr>
+                        <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                          <td className="py-2.5 px-3 font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5 text-indigo-500 shrink-0" /> Syllabus Coverage
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="flex items-center gap-2 max-w-xs">
+                              <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
+                                <div
+                                  className="bg-indigo-600 dark:bg-indigo-500 h-2 rounded-full transition-all duration-700"
+                                  style={{ width: `${Math.min(100, myCurriculum.completion_percentage)}%` }}
+                                />
+                              </div>
+                              <span className="font-mono font-bold text-xs text-indigo-600 dark:text-indigo-400 shrink-0">
+                                {myCurriculum.completion_percentage}%
+                              </span>
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            <Badge variant={myCurriculum.completion_percentage === 100 ? 'success' : 'info'}>
+                              {myCurriculum.completion_percentage === 100 ? 'COMPLETED' : 'IN PROGRESS'}
+                            </Badge>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
 
                   {myCurriculum.topics && myCurriculum.topics.length > 0 && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                      {myCurriculum.topics.slice(0, 4).map((t) => (
-                        <div
-                          key={t.id}
-                          className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2"
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            {t.is_completed ? (
-                              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                            ) : (
-                              <Clock className="w-4 h-4 text-slate-400 shrink-0" />
-                            )}
-                            <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
-                              {t.title}
-                            </span>
-                          </div>
-                          {t.assessment_name && (
-                            <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-1.5 py-0.5 rounded shrink-0">
-                              {t.assessment_name}
-                            </span>
-                          )}
-                        </div>
-                      ))}
+                    <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-1.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block px-1">
+                        Syllabus Topic Progression
+                      </span>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs">
+                          <thead>
+                            <tr className="border-b border-slate-200 dark:border-slate-800 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold bg-slate-50/60 dark:bg-slate-950/40">
+                              <th className="py-2 px-2.5">Topic Title</th>
+                              <th className="py-2 px-2.5">Status</th>
+                              <th className="py-2 px-2.5 text-right">Associated Assessment</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-sans">
+                            {myCurriculum.topics.slice(0, 5).map((t) => (
+                              <tr key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                                <td className="py-2 px-2.5 font-medium text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                                  {t.is_completed ? (
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                                  ) : (
+                                    <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                  )}
+                                  <span className="truncate">{t.title}</span>
+                                </td>
+                                <td className="py-2 px-2.5">
+                                  <Badge variant={t.is_completed ? 'success' : 'neutral'}>
+                                    {t.is_completed ? 'COMPLETED' : 'PENDING'}
+                                  </Badge>
+                                </td>
+                                <td className="py-2 px-2.5 text-right text-slate-500 dark:text-slate-400">
+                                  {t.assessment_name ? (
+                                    <span className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-1.5 py-0.5 rounded">
+                                      {t.assessment_name}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-400 italic text-[11px]">Core Module</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -917,54 +1108,83 @@ export const StudentDashboard: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* 5 Categories Mini Grid */}
-                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                        <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-center">
-                          <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
-                            Technical
-                          </span>
-                          <span className="font-mono font-bold text-slate-900 dark:text-slate-100 text-xs mt-0.5 block">
-                            ★ {fb.technical_skills}/5
-                          </span>
-                        </div>
-                        <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-center">
-                          <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
-                            Tasks
-                          </span>
-                          <span className="font-mono font-bold text-slate-900 dark:text-slate-100 text-xs mt-0.5 block">
-                            ★ {fb.task_performance}/5
-                          </span>
-                        </div>
-                        <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-center">
-                          <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
-                            Communication
-                          </span>
-                          <span className="font-mono font-bold text-slate-900 dark:text-slate-100 text-xs mt-0.5 block">
-                            ★ {fb.communication}/5
-                          </span>
-                        </div>
-                        <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-center">
-                          <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
-                            Professionalism
-                          </span>
-                          <span className="font-mono font-bold text-slate-900 dark:text-slate-100 text-xs mt-0.5 block">
-                            ★ {fb.punctuality_professionalism}/5
-                          </span>
-                        </div>
-                        <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-center">
-                          <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
-                            Attitude
-                          </span>
-                          <span className="font-mono font-bold text-slate-900 dark:text-slate-100 text-xs mt-0.5 block">
-                            ★ {fb.learning_attitude}/5
-                          </span>
-                        </div>
+                      {/* Evaluation Dimension Table */}
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs">
+                          <thead>
+                            <tr className="border-b border-slate-200 dark:border-slate-800 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold bg-white/60 dark:bg-slate-900/60">
+                              <th className="py-2 px-2.5">Evaluation Dimension</th>
+                              <th className="py-2 px-2.5 text-center">Score (out of 5)</th>
+                              <th className="py-2 px-2.5 text-right">Assessment</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-sans">
+                            <tr className="hover:bg-white/40 dark:hover:bg-slate-800/30">
+                              <td className="py-1.5 px-2.5 font-medium text-slate-700 dark:text-slate-300">Technical Skills</td>
+                              <td className="py-1.5 px-2.5 font-mono font-bold text-center text-amber-600 dark:text-amber-400">
+                                ★ {fb.technical_skills}/5
+                              </td>
+                              <td className="py-1.5 px-2.5 text-right">
+                                <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                                  {fb.technical_skills >= 4 ? 'Proficient' : fb.technical_skills >= 3 ? 'Competent' : 'Needs Practice'}
+                                </span>
+                              </td>
+                            </tr>
+                            <tr className="hover:bg-white/40 dark:hover:bg-slate-800/30">
+                              <td className="py-1.5 px-2.5 font-medium text-slate-700 dark:text-slate-300">Task Performance</td>
+                              <td className="py-1.5 px-2.5 font-mono font-bold text-center text-amber-600 dark:text-amber-400">
+                                ★ {fb.task_performance}/5
+                              </td>
+                              <td className="py-1.5 px-2.5 text-right">
+                                <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                                  {fb.task_performance >= 4 ? 'Reliable' : fb.task_performance >= 3 ? 'Satisfactory' : 'Needs Review'}
+                                </span>
+                              </td>
+                            </tr>
+                            <tr className="hover:bg-white/40 dark:hover:bg-slate-800/30">
+                              <td className="py-1.5 px-2.5 font-medium text-slate-700 dark:text-slate-300">Communication</td>
+                              <td className="py-1.5 px-2.5 font-mono font-bold text-center text-amber-600 dark:text-amber-400">
+                                ★ {fb.communication}/5
+                              </td>
+                              <td className="py-1.5 px-2.5 text-right">
+                                <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                                  {fb.communication >= 4 ? 'Effective' : fb.communication >= 3 ? 'Clear' : 'Developing'}
+                                </span>
+                              </td>
+                            </tr>
+                            <tr className="hover:bg-white/40 dark:hover:bg-slate-800/30">
+                              <td className="py-1.5 px-2.5 font-medium text-slate-700 dark:text-slate-300">Punctuality & Professionalism</td>
+                              <td className="py-1.5 px-2.5 font-mono font-bold text-center text-amber-600 dark:text-amber-400">
+                                ★ {fb.punctuality_professionalism}/5
+                              </td>
+                              <td className="py-1.5 px-2.5 text-right">
+                                <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                                  {fb.punctuality_professionalism >= 4 ? 'Exemplary' : fb.punctuality_professionalism >= 3 ? 'Standard' : 'Improvement Needed'}
+                                </span>
+                              </td>
+                            </tr>
+                            <tr className="hover:bg-white/40 dark:hover:bg-slate-800/30">
+                              <td className="py-1.5 px-2.5 font-medium text-slate-700 dark:text-slate-300">Learning Attitude</td>
+                              <td className="py-1.5 px-2.5 font-mono font-bold text-center text-amber-600 dark:text-amber-400">
+                                ★ {fb.learning_attitude}/5
+                              </td>
+                              <td className="py-1.5 px-2.5 text-right">
+                                <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                                  {fb.learning_attitude >= 4 ? 'Proactive' : fb.learning_attitude >= 3 ? 'Receptive' : 'Passive'}
+                                </span>
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
                       </div>
 
-                      {/* Mentor Comment */}
-                      <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-[11px] text-slate-700 dark:text-slate-300 italic">
-                        "{fb.comment}"
-                      </div>
+                      {/* Mentor Remarks List */}
+                      {fb.comment && (
+                        <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-start gap-2 text-xs">
+                          <span className="font-semibold text-slate-500 dark:text-slate-400 shrink-0">Mentor Remarks:</span>
+                          <span className="text-slate-700 dark:text-slate-300 italic">"{fb.comment}"</span>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1234,6 +1454,82 @@ export const StudentDashboard: React.FC = () => {
           attendanceSummary={attendanceSummary}
         />
 
+        {/* Face Re-Enrollment Information Modal */}
+        <Modal
+          isOpen={isReEnrollHelpOpen}
+          onClose={() => setIsReEnrollHelpOpen(false)}
+          title="Biometric Face Re-Enrollment Information"
+        >
+          <div className="space-y-4 text-xs font-sans text-slate-700 dark:text-slate-300">
+            <div className="p-3 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-xl flex items-center gap-2.5">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <div>
+                <div className="font-bold text-emerald-900 dark:text-emerald-200 text-xs">Biometric Baseline is Secure & Active</div>
+                <div className="text-[11px] text-emerald-800 dark:text-slate-300">Your face template was enrolled and verified by HR administration and does not expire.</div>
+              </div>
+            </div>
+
+            <p>
+              To maintain system integrity and zero-trust security standards, biometric re-enrollment is strictly managed by HR Administration. Biometric templates cannot be re-enrolled arbitrarily.
+            </p>
+
+            <div className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-1.5">
+              <div className="font-bold text-slate-900 dark:text-slate-100">When is re-enrollment necessary?</div>
+              <ul className="list-disc list-inside space-y-1 text-slate-600 dark:text-slate-400">
+                <li>Significant permanent physical appearance changes</li>
+                <li>Persistent camera recognition mismatches under optimal lighting</li>
+                <li>Authorized administrative or identity updates</li>
+              </ul>
+            </div>
+
+            <div className="pt-2 flex justify-end gap-2">
+              <Button variant="secondary" size="sm" onClick={() => setIsReEnrollHelpOpen(false)}>
+                Close
+              </Button>
+              <a
+                href={`mailto:hr@netlink.org?subject=Biometric%20Face%20Re-Enrollment%20Request%20-%20${encodeURIComponent(student?.user?.full_name || student?.roll_number || '')}%20(${student?.roll_number})&body=Hello%20HR%20Team,%0D%0A%0D%0AI%20am%20requesting%20a%20biometric%20face%20re-enrollment%20for%20the%20following%20reason:%0D%0A[Please%20specify%20reason]%0D%0A%0D%0AName:%20${encodeURIComponent(student?.user?.full_name || '')}%0D%0ARoll%20Number:%20${student?.roll_number}`}
+                className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs px-3 py-1.5 rounded-lg transition-colors"
+              >
+                <Mail className="w-3.5 h-3.5" /> Email HR for Re-Enrollment
+              </a>
+            </div>
+          </div>
+        </Modal>
+
+        {/* Not Enrolled Notice Modal */}
+        <Modal
+          isOpen={isNotEnrolledNoticeOpen}
+          onClose={() => setIsNotEnrolledNoticeOpen(false)}
+          title="Biometric Face Enrollment Required"
+        >
+          <div className="space-y-4 text-xs font-sans text-slate-700 dark:text-slate-300">
+            <div className="p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-xl flex items-center gap-2.5">
+              <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
+              <div>
+                <div className="font-bold text-amber-900 dark:text-amber-200 text-xs">HR Facial Registration Required</div>
+                <div className="text-[11px] text-amber-800 dark:text-slate-300">Only students with an enrolled face baseline verified by HR can mark attendance.</div>
+              </div>
+            </div>
+
+            <p>
+              Under Netlink security policy, initial facial biometric enrollment must be conducted by HR Administration to guarantee identity authenticity. Once registered by HR, your facial baseline remains valid and secure throughout your training.
+            </p>
+
+            <div className="pt-2 flex justify-end gap-2">
+              <Button variant="secondary" size="sm" onClick={() => setIsNotEnrolledNoticeOpen(false)}>
+                Understood
+              </Button>
+              <a
+                href={`mailto:hr@netlink.org?subject=Biometric%20Face%20Enrollment%20Request%20-%20${encodeURIComponent(student?.user?.full_name || student?.roll_number || 'Trainee')}%20(${student?.roll_number})&body=Hello%20HR%20Team,%0D%0A%0D%0APlease%20schedule%20my%20initial%20biometric%20face%20baseline%20enrollment%20so%20I%20can%20mark%20daily%20attendance.%0D%0A%0D%0AName:%20${encodeURIComponent(student?.user?.full_name || '')}%0D%0ARoll%20Number:%20${student?.roll_number}`}
+                className="inline-flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs px-3 py-1.5 rounded-lg transition-colors"
+              >
+                <Mail className="w-3.5 h-3.5" /> Contact HR Administration
+              </a>
+            </div>
+          </div>
+        </Modal>
+
+        {/* HR Face Enrollment Modal (Used by HR / Admin users) */}
         <FaceEnrollmentModal
           isOpen={isEnrollModalOpen}
           onClose={() => setIsEnrollModalOpen(false)}

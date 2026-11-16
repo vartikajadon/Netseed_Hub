@@ -8,8 +8,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.db
+*.db-shm
+*.db-wal
 *.sqlite3
-!backend/app/database/bundled_dev.db
 venv/
 .venv/
 .pytest_cache/

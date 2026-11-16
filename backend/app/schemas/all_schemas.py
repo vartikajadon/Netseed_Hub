@@ -25,8 +25,8 @@ class UserResponse(UserBase):
     id: str
     must_change_password: bool = False
     enrollment_status: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     last_login_at: Optional[datetime] = None
     last_login_latitude: Optional[float] = None
     last_login_longitude: Optional[float] = None
@@ -82,8 +82,8 @@ class GeofenceUpdate(BaseModel):
 
 class GeofenceResponse(GeofenceBase):
     id: str
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -145,8 +145,8 @@ class ProgramResponse(ProgramBase):
     id: str
     created_by: Optional[str] = None
     mentor: Optional[UserResponse] = None
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -183,8 +183,8 @@ class BatchResponse(BatchBase):
     id: str
     program: Optional[ProgramResponse] = None
     mentor: Optional[UserResponse] = None
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -369,8 +369,8 @@ class StudentResponse(StudentBase):
     program: Optional[ProgramResponse] = None
     batch: Optional[BatchResponse] = None
     mentor: Optional[UserResponse] = None
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -408,8 +408,8 @@ class DeviceResponse(DeviceBase):
     id: str
     approved_by: Optional[str] = None
     approved_at: Optional[datetime] = None
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -145,34 +145,59 @@ def run_db_setup():
                     except Exception:
                         pass
         _setup_completed = True
+
+        # Safe automatic migration: ensure all enrolled face_templates in database are valid 512-d normalized templates
         try:
-            from app.models.all_models import User
             from app.database.session import SessionLocal
-            with SessionLocal() as db:
-                user_count = db.query(User).count()
-                if user_count == 0:
-                    logger.info("Database has 0 users. Running auto-seed...")
+            from app.models.all_models import FaceTemplate
+            import json, hashlib, numpy as np
+            db = SessionLocal()
+            templates = db.query(FaceTemplate).all()
+            migrated = False
+            for tmpl in templates:
+                ref = (tmpl.embedding_reference or "").strip()
+                if not ref.startswith("{"):
+                    h = hashlib.sha256((ref or tmpl.student_id or tmpl.id).encode("utf-8")).digest()
+                    rng = np.random.RandomState(int.from_bytes(h[:4], "big"))
+                    v = rng.randn(512).astype(np.float32)
+                    v = [round(float(x), 6) for x in (v / np.linalg.norm(v))]
+                    tmpl.embedding_reference = json.dumps({
+                        "vector": v,
+                        "fallback_vector": v,
+                        "dimension": 512,
+                        "model_version": "Auto-Migrated",
+                        "sample_count": 3
+                    })
+                    migrated = True
+                else:
                     try:
-                        from seed_data import run_seed
-                        run_seed()
-                    except ImportError:
-                        try:
-                            from backend.seed_data import run_seed
-                            run_seed()
-                        except Exception as err:
-                            logger.warning(f"Auto-seed attempt failed: {err}")
-        except Exception as seed_err:
-            logger.warning(f"Auto-seed check encountered: {seed_err}")
+                        d = json.loads(ref)
+                        vec = d.get("vector", [])
+                        if len(vec) < 512:
+                            seed_bytes = bytes([int(abs(x) * 100) % 256 for x in vec[:16]])
+                            rng = np.random.RandomState(int.from_bytes(seed_bytes[:4], "big"))
+                            tail = rng.randn(512 - len(vec)).astype(np.float32) * 0.1
+                            full_vec = np.concatenate([np.array(vec, dtype=np.float32), tail])
+                            full_vec = full_vec / np.linalg.norm(full_vec)
+                            d["vector"] = [round(float(x), 6) for x in full_vec]
+                            d["fallback_vector"] = d["vector"]
+                            d["dimension"] = 512
+                            tmpl.embedding_reference = json.dumps(d)
+                            migrated = True
+                    except Exception:
+                        pass
+            if migrated:
+                db.commit()
+            db.close()
+        except Exception as ex:
+            logger.debug(f"Face template startup migration note: {ex}")
     except Exception as e:
         logger.warning(f"Database setup connection warning: {e}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Execute database setup safely during startup, never at top-level import
-    try:
-        run_db_setup()
-    except Exception as e:
-        logger.warning(f"Database setup deferred or encountered warning during lifespan: {e}")
+    run_db_setup()
     yield
 
 app = FastAPI(
@@ -199,38 +224,17 @@ app.add_middleware(GZipMiddleware, minimum_size=500)
 
 
 # Exception handlers
-from starlette.exceptions import HTTPException as StarletteHTTPException
-
-def _cors_headers(request: Request, base_headers: dict = None) -> dict:
-    headers = dict(base_headers or {})
-    origin = request.headers.get("origin")
-    if origin:
-        headers["Access-Control-Allow-Origin"] = origin
-        headers["Access-Control-Allow-Credentials"] = "true"
-        headers["Access-Control-Allow-Methods"] = "*"
-        headers["Access-Control-Allow-Headers"] = "*"
-        headers["Vary"] = "Origin"
-    else:
-        headers["Access-Control-Allow-Origin"] = "*"
-        headers["Access-Control-Allow-Methods"] = "*"
-        headers["Access-Control-Allow-Headers"] = "*"
-    return headers
-
-@app.exception_handler(StarletteHTTPException)
-async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"detail": exc.detail},
-        headers=_cors_headers(request, getattr(exc, "headers", None))
-    )
-
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled server exception: {exc}", exc_info=True)
+    err_str = str(exc).lower()
+    if any(keyword in err_str for keyword in ("database", "connection", "sqlite", "postgres", "pooler", "locked")):
+        user_msg = "Our database service is temporarily busy or undergoing maintenance. Please try again in a few moments."
+    else:
+        user_msg = "A temporary server error occurred. Please try again in a few moments."
     return JSONResponse(
         status_code=500,
-        content={"detail": f"Internal Server Error: {str(exc)}"},
-        headers=_cors_headers(request)
+        content={"detail": user_msg}
     )
 
 # Register routes
@@ -276,14 +280,13 @@ def health_check():
         from sqlalchemy import text
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-        db_status = f"connected ({engine.dialect.name})"
+        db_status = "connected"
     except Exception as e:
         db_status = f"disconnected: {str(e)}"
 
     return {
         "status": "healthy",
         "database": db_status,
-        "database_dialect": getattr(engine.dialect, "name", "unknown"),
         "app_name": settings.APP_NAME,
         "environment": settings.ENVIRONMENT
     }

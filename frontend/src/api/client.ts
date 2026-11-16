@@ -1,5 +1,7 @@
 /// <reference types="vite/client" />
 
+import { toFriendlyErrorMessage } from '../utils/errorFormatter';
+
 export const FIXED_BACKEND_API_URL = 'https://netseed-hub.vercel.app/api/v1';
 
 export function getApiBaseUrl(): string {
@@ -175,22 +177,14 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
       });
     } catch (err: any) {
       const rawMsg = err?.message || '';
-      const isNetworkError = rawMsg === 'Failed to fetch' || rawMsg.includes('NetworkError') || rawMsg.includes('fetch');
-
-      let friendlyMsg = rawMsg;
-      if (isNetworkError) {
-        friendlyMsg = `Unable to connect to backend server at ${baseUrl}. Please check that your live backend service is online.`;
-      }
-
+      const friendlyMsg = toFriendlyErrorMessage(rawMsg, 0, { detail: rawMsg, targetUrl });
       throw new ApiError(friendlyMsg, 0, { detail: rawMsg, targetUrl });
     }
 
     const contentType = response.headers.get('content-type') || '';
     if (contentType.includes('text/html')) {
-      throw new ApiError(
-        `Received HTML instead of API response from ${targetUrl}. Please ensure your backend URL is configured to point to your live backend domain.`,
-        response.status
-      );
+      const friendlyHtmlMsg = toFriendlyErrorMessage('Received HTML instead of API response', response.status);
+      throw new ApiError(friendlyHtmlMsg, response.status);
     }
 
     if (!response.ok) {
@@ -201,18 +195,20 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
         errorData = { detail: response.statusText };
       }
 
-      let message = 'An unexpected API error occurred';
+      let rawMessage = 'An unexpected API error occurred';
       if (typeof errorData.detail === 'string') {
-        message = errorData.detail;
+        rawMessage = errorData.detail;
       } else if (Array.isArray(errorData.detail)) {
-        message = errorData.detail
+        rawMessage = errorData.detail
           .map((d: any) => (typeof d === 'string' ? d : d.msg || JSON.stringify(d)))
           .join('; ');
       } else if (errorData.detail && typeof errorData.detail === 'object') {
-        message = JSON.stringify(errorData.detail);
+        rawMessage = JSON.stringify(errorData.detail);
       } else if (typeof errorData.message === 'string') {
-        message = errorData.message;
+        rawMessage = errorData.message;
       }
+
+      const message = toFriendlyErrorMessage(rawMessage, response.status, errorData);
 
       if (response.status === 403 && typeof message === 'string' && message.includes('ACCESS_REVOKED')) {
         if (typeof window !== 'undefined') {
