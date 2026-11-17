@@ -168,7 +168,10 @@ class AttendanceService:
         model_name = "ArcFace-buffalo_s" if get_insightface_app() is not None else "Fallback-DCT-HOG"
 
         fallback_vec = None
-        if face_samples and len(face_samples) > 0:
+        if model_name == "Fallback-DCT-HOG":
+            # Vector already extracted via fallback algorithm; avoid duplicate second-pass extraction
+            fallback_vec = vector
+        elif face_samples and len(face_samples) > 0:
             fallback_vec = FaceVerificationService.extract_fallback_centroid(face_samples)
         elif face_image_base64:
             img = FaceVerificationService.decode_image_base64(face_image_base64)

@@ -93,3 +93,7 @@ def api_v1_change_password(
 ):
     return change_password(payload=payload, current_user=current_user, db=db)
 
+@api_router.get("/cron/keepalive", summary="Vercel Cron Keep-Alive", include_in_schema=False)
+def cron_keepalive():
+    return {"alive": True, "ts": __import__('time').time()}
+

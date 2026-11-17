@@ -117,6 +117,8 @@ class Student(Base):
     __tablename__ = "students"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
+    name = Column(String(255), nullable=True) # Student full name
+    full_name = Column(String(255), nullable=True) # Direct mirror of student name
     user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
     program_id = Column(String(36), ForeignKey("programs.id", ondelete="SET NULL"), nullable=True)
     batch_id = Column(String(36), ForeignKey("batches.id", ondelete="SET NULL"), nullable=True, index=True)

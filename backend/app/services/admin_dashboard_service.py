@@ -1,9 +1,10 @@
 import json
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session
-from sqlalchemy import func, desc, or_, and_
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func, desc, or_, and_, case
 
+from app.core.cache import DASHBOARD_METRICS_CACHE
 from app.models.all_models import (
     User, Student, Program, Batch, Geofence, Device, Consent,
     AttendanceDailyRecord, AttendanceEvent, RegularizationRequest, AuditLog
@@ -27,7 +28,38 @@ from app.schemas.admin_dashboard_schemas import (
 class AdminDashboardService:
 
     @staticmethod
-    def _calculate_student_readiness(student: Student, db: Session) -> Dict[str, Any]:
+    def _get_batch_attendance_rates(db: Session, student_ids: Optional[List[str]] = None) -> Dict[str, float]:
+        """
+        Calculates attendance rates for all requested students in ONE single SQL query using GROUP BY,
+        preventing N+1 round trips to the database.
+        """
+        query = db.query(
+            AttendanceDailyRecord.student_id,
+            func.count(AttendanceDailyRecord.id).label("total_days"),
+            func.sum(
+                case(
+                    (AttendanceDailyRecord.status.in_(["PRESENT", "REGULARIZED"]), 1),
+                    else_=0
+                )
+            ).label("present_days")
+        )
+        if student_ids is not None:
+            if not student_ids:
+                return {}
+            query = query.filter(AttendanceDailyRecord.student_id.in_(student_ids))
+
+        results = query.group_by(AttendanceDailyRecord.student_id).all()
+        attendance_rates: Dict[str, float] = {}
+        for r in results:
+            s_id = r[0]
+            tot = r[1] or 0
+            pres = r[2] or 0
+            if tot > 0:
+                attendance_rates[s_id] = round((float(pres) / float(tot)) * 100.0, 1)
+        return attendance_rates
+
+    @staticmethod
+    def _calculate_student_readiness(student: Student, db: Session, attendance_rate: Optional[float] = None) -> Dict[str, Any]:
         """
         Calculates individual student career readiness score using PRD weighted formula:
         Attendance = 20%
@@ -36,14 +68,17 @@ class AdminDashboardService:
         Projects & Presentations = 15%
         Assessments = 10%
         Mentor Feedback = 5%
+
+        If attendance_rate is pre-computed (via batch query), uses it directly to eliminate N+1 queries.
         """
         # 1. Attendance Score (20%)
-        records = db.query(AttendanceDailyRecord).filter(AttendanceDailyRecord.student_id == student.id).all()
-        if records:
-            present_days = sum(1 for r in records if r.status in ("PRESENT", "REGULARIZED"))
-            attendance_rate = round((present_days / len(records)) * 100.0, 1)
-        else:
-            attendance_rate = 92.0 if student.enrollment_status == "ACTIVE" else 75.0
+        if attendance_rate is None:
+            records = db.query(AttendanceDailyRecord).filter(AttendanceDailyRecord.student_id == student.id).all()
+            if records:
+                present_days = sum(1 for r in records if r.status in ("PRESENT", "REGULARIZED"))
+                attendance_rate = round((present_days / len(records)) * 100.0, 1)
+            else:
+                attendance_rate = 92.0 if student.enrollment_status == "ACTIVE" else 75.0
 
         attendance_score = min(100.0, max(0.0, attendance_rate))
 
@@ -108,7 +143,12 @@ class AdminDashboardService:
     def get_summary(db: Session) -> AdminDashboardSummaryResponse:
         """
         Aggregate top-level platform operational metrics across database entities.
+        Uses in-memory TTL caching and single-query batch aggregations to eliminate N+1 bottlenecks.
         """
+        cached = DASHBOARD_METRICS_CACHE.get("admin_summary")
+        if cached:
+            return cached
+
         # 1. Users Breakdown
         users = db.query(User).all()
         user_counts = {
@@ -251,13 +291,16 @@ class AdminDashboardService:
         )
 
         # 8. Career Readiness Summary
+        student_ids = [s.id for s in students]
+        batch_attendance_rates = AdminDashboardService._get_batch_attendance_rates(db, student_ids)
         readiness_scores = []
         ready_count = 0
         needs_dev_count = 0
         not_ready_count = 0
 
         for s in students:
-            eval_data = AdminDashboardService._calculate_student_readiness(s, db)
+            att_rate = batch_attendance_rates.get(s.id, 92.0 if s.enrollment_status == "ACTIVE" else 75.0)
+            eval_data = AdminDashboardService._calculate_student_readiness(s, db, attendance_rate=att_rate)
             score = eval_data["score"]
             readiness_scores.append(score)
             if eval_data["category"] == "READY":
@@ -299,7 +342,7 @@ class AdminDashboardService:
             face_mismatches=face_mismatches
         )
 
-        return AdminDashboardSummaryResponse(
+        response = AdminDashboardSummaryResponse(
             users=users_summary,
             students=students_summary,
             programs=programs_summary,
@@ -310,6 +353,8 @@ class AdminDashboardService:
             career_readiness=career_summary,
             security_alerts=security_summary
         )
+        DASHBOARD_METRICS_CACHE.set("admin_summary", response)
+        return response
 
     @staticmethod
     def get_student_overview(
@@ -323,8 +368,14 @@ class AdminDashboardService:
     ) -> StudentOverviewResponse:
         """
         Detailed student roster overview with performance, readiness, and filtering.
+        Optimized with eager loading and batch attendance rate calculation.
         """
-        query = db.query(Student).join(User, Student.user_id == User.id)
+        query = db.query(Student).options(
+            joinedload(Student.user),
+            joinedload(Student.program),
+            joinedload(Student.batch),
+            joinedload(Student.mentor)
+        ).join(User, Student.user_id == User.id)
 
         if program_id:
             query = query.filter(Student.program_id == program_id)
@@ -358,10 +409,13 @@ class AdminDashboardService:
 
         # Slice for pagination
         paginated_students = all_filtered[skip : skip + limit]
+        pag_student_ids = [s.id for s in paginated_students]
+        batch_attendance_rates = AdminDashboardService._get_batch_attendance_rates(db, pag_student_ids)
 
         items = []
         for s in paginated_students:
-            eval_data = AdminDashboardService._calculate_student_readiness(s, db)
+            att_rate = batch_attendance_rates.get(s.id, 92.0 if s.enrollment_status == "ACTIVE" else 75.0)
+            eval_data = AdminDashboardService._calculate_student_readiness(s, db, attendance_rate=att_rate)
             user = s.user
             prog = s.program
             batch = s.batch
@@ -417,18 +471,29 @@ class AdminDashboardService:
         total_batches_count = 0
 
         for p in programs:
-            batches = db.query(Batch).filter(Batch.program_id == p.id).all()
+            batches = db.query(Batch).options(joinedload(Batch.mentor)).filter(Batch.program_id == p.id).all()
             total_batches_count += len(batches)
 
             # Program students
-            prog_students = db.query(Student).filter(Student.program_id == p.id).all()
+            prog_students = db.query(Student).options(
+                joinedload(Student.user),
+                joinedload(Student.program),
+                joinedload(Student.batch),
+                joinedload(Student.mentor)
+            ).filter(Student.program_id == p.id).all()
             active_students = sum(1 for s in prog_students if s.enrollment_status == "ACTIVE")
+
+            prog_student_ids = [s.id for s in prog_students]
+            batch_attendance_rates = AdminDashboardService._get_batch_attendance_rates(db, prog_student_ids)
 
             # Average attendance & readiness for this program
             readiness_list = []
             attendance_list = []
+            student_eval_map = {}
             for s in prog_students:
-                r_eval = AdminDashboardService._calculate_student_readiness(s, db)
+                att_rate = batch_attendance_rates.get(s.id, 92.0 if s.enrollment_status == "ACTIVE" else 75.0)
+                r_eval = AdminDashboardService._calculate_student_readiness(s, db, attendance_rate=att_rate)
+                student_eval_map[s.id] = r_eval
                 readiness_list.append(r_eval["score"])
                 attendance_list.append(r_eval["attendance_rate"])
 
@@ -438,10 +503,7 @@ class AdminDashboardService:
             batch_items = []
             for b in batches:
                 b_students = [s for s in prog_students if s.batch_id == b.id]
-                b_att_list = []
-                for s in b_students:
-                    r_eval = AdminDashboardService._calculate_student_readiness(s, db)
-                    b_att_list.append(r_eval["attendance_rate"])
+                b_att_list = [student_eval_map[s.id]["attendance_rate"] for s in b_students if s.id in student_eval_map]
                 b_avg_att = round(sum(b_att_list) / len(b_att_list), 1) if b_att_list else 0.0
 
                 mentor_user = b.mentor
@@ -553,7 +615,11 @@ class AdminDashboardService:
             ))
 
         # 3. Students below 75% attendance threshold
-        students_query = db.query(Student).filter(Student.enrollment_status == "ACTIVE")
+        students_query = db.query(Student).options(
+            joinedload(Student.user),
+            joinedload(Student.program),
+            joinedload(Student.batch)
+        ).filter(Student.enrollment_status == "ACTIVE")
         if program_id:
             students_query = students_query.filter(Student.program_id == program_id)
         if batch_id:
@@ -563,11 +629,27 @@ class AdminDashboardService:
         below_threshold = []
         threshold = 75.0
 
+        all_student_ids = [s.id for s in all_students]
+        stats_map: Dict[str, Tuple[int, int]] = {}
+        if all_student_ids:
+            grouped_stats = db.query(
+                AttendanceDailyRecord.student_id,
+                func.count(AttendanceDailyRecord.id).label("total_days"),
+                func.sum(
+                    case(
+                        (AttendanceDailyRecord.status.in_(["PRESENT", "REGULARIZED"]), 1),
+                        else_=0
+                    )
+                ).label("present_days")
+            ).filter(AttendanceDailyRecord.student_id.in_(all_student_ids)).group_by(AttendanceDailyRecord.student_id).all()
+            for row in grouped_stats:
+                stats_map[row[0]] = (int(row[1] or 0), int(row[2] or 0))
+
         for s in all_students:
-            s_recs = db.query(AttendanceDailyRecord).filter(AttendanceDailyRecord.student_id == s.id).all()
-            if s_recs:
-                present_days = sum(1 for r in s_recs if r.status in ("PRESENT", "REGULARIZED"))
-                rate = round((present_days / len(s_recs)) * 100.0, 1)
+            stat = stats_map.get(s.id)
+            if stat:
+                total_days, present_days = stat
+                rate = round((present_days / total_days) * 100.0, 1)
                 if rate < threshold:
                     user = s.user
                     below_threshold.append(BelowThresholdStudent(
@@ -576,7 +658,7 @@ class AdminDashboardService:
                         full_name=user.full_name if user else "Student",
                         program_title=s.program.title if s.program else None,
                         batch_name=s.batch.name if s.batch else None,
-                        total_recorded_days=len(s_recs),
+                        total_recorded_days=total_days,
                         present_days=present_days,
                         attendance_rate=rate,
                         threshold_rate=threshold
@@ -590,17 +672,22 @@ class AdminDashboardService:
         # 5. Batch Breakdown
         batches = db.query(Batch).all()
         batch_breakdowns = []
+        # Pre-group active students by batch_id
+        active_students_by_batch: Dict[str, List[str]] = {}
+        for s in all_students:
+            if s.batch_id:
+                active_students_by_batch.setdefault(s.batch_id, []).append(s.id)
+
+        # Pre-index today's records by student_id
+        today_record_status: Dict[str, str] = {r.student_id: (r.status or "").upper() for r in today_records}
+
         for b in batches:
-            b_students = db.query(Student).filter(Student.batch_id == b.id, Student.enrollment_status == "ACTIVE").all()
-            b_student_ids = [s.id for s in b_students]
+            b_student_ids = active_students_by_batch.get(b.id, [])
             if b_student_ids:
-                b_records = db.query(AttendanceDailyRecord).filter(
-                    AttendanceDailyRecord.student_id.in_(b_student_ids),
-                    AttendanceDailyRecord.date == today
-                ).all()
-                b_present = sum(1 for r in b_records if r.status in ("PRESENT", "REGULARIZED"))
-                b_absent = sum(1 for r in b_records if r.status == "ABSENT")
-                b_pct = round(b_present / len(b_records) * 100.0, 1) if b_records else 0.0
+                b_statuses = [today_record_status[sid] for sid in b_student_ids if sid in today_record_status]
+                b_present = sum(1 for st in b_statuses if st in ("PRESENT", "REGULARIZED"))
+                b_absent = sum(1 for st in b_statuses if st == "ABSENT")
+                b_pct = round(b_present / len(b_statuses) * 100.0, 1) if b_statuses else 0.0
             else:
                 b_present = 0
                 b_absent = 0
@@ -609,7 +696,7 @@ class AdminDashboardService:
             batch_breakdowns.append(BatchAttendanceBreakdown(
                 batch_id=b.id,
                 batch_name=b.name,
-                total_students=len(b_students),
+                total_students=len(b_student_ids),
                 present_count=b_present,
                 absent_count=b_absent,
                 attendance_pct=b_pct
@@ -634,7 +721,10 @@ class AdminDashboardService:
         """
         Aggregated task completion statistics and 4-tier skill level distribution.
         """
-        students_query = db.query(Student)
+        students_query = db.query(Student).options(
+            joinedload(Student.user),
+            joinedload(Student.program)
+        )
         if program_id:
             students_query = students_query.filter(Student.program_id == program_id)
         if batch_id:
@@ -644,6 +734,8 @@ class AdminDashboardService:
 
         students = students_query.all()
         total_students = len(students)
+        student_ids = [s.id for s in students]
+        batch_attendance_rates = AdminDashboardService._get_batch_attendance_rates(db, student_ids)
 
         # Baseline curriculum skills
         default_skills = [
@@ -677,7 +769,8 @@ class AdminDashboardService:
         students_with_gaps = []
 
         for s in students:
-            eval_data = AdminDashboardService._calculate_student_readiness(s, db)
+            att_rate = batch_attendance_rates.get(s.id, 92.0 if s.enrollment_status == "ACTIVE" else 75.0)
+            eval_data = AdminDashboardService._calculate_student_readiness(s, db, attendance_rate=att_rate)
             s_score = eval_data["skill_score"]
             all_skill_scores.append(s_score)
 
@@ -733,13 +826,19 @@ class AdminDashboardService:
         """
         Career readiness decision-support analysis adhering to PRD weightings.
         """
-        students_query = db.query(Student)
+        students_query = db.query(Student).options(
+            joinedload(Student.user),
+            joinedload(Student.program),
+            joinedload(Student.batch)
+        )
         if program_id:
             students_query = students_query.filter(Student.program_id == program_id)
         if batch_id:
             students_query = students_query.filter(Student.batch_id == batch_id)
 
         students = students_query.all()
+        student_ids = [s.id for s in students]
+        batch_attendance_rates = AdminDashboardService._get_batch_attendance_rates(db, student_ids)
 
         ready_count = 0
         needs_dev_count = 0
@@ -748,7 +847,8 @@ class AdminDashboardService:
         student_items = []
 
         for s in students:
-            eval_data = AdminDashboardService._calculate_student_readiness(s, db)
+            att_rate = batch_attendance_rates.get(s.id, 92.0 if s.enrollment_status == "ACTIVE" else 75.0)
+            eval_data = AdminDashboardService._calculate_student_readiness(s, db, attendance_rate=att_rate)
             score = eval_data["score"]
             cat = eval_data["category"]
             all_scores.append(score)
@@ -831,6 +931,8 @@ class AdminDashboardService:
             query = query.filter(Student.batch_id == batch_id)
 
         students = query.all()
+        grad_comp_ids = [s.id for s in students if (s.enrollment_status or "").upper() in ("GRADUATED", "COMPLETED")]
+        batch_attendance_rates = AdminDashboardService._get_batch_attendance_rates(db, grad_comp_ids)
 
         counts = {
             "PPO / Full-time Offer": 0,
@@ -845,7 +947,8 @@ class AdminDashboardService:
         for s in students:
             st = (s.enrollment_status or "").upper()
             if st in ("GRADUATED", "COMPLETED"):
-                eval_data = AdminDashboardService._calculate_student_readiness(s, db)
+                att_rate = batch_attendance_rates.get(s.id, 92.0 if s.enrollment_status == "ACTIVE" else 75.0)
+                eval_data = AdminDashboardService._calculate_student_readiness(s, db, attendance_rate=att_rate)
                 if eval_data["score"] >= 85:
                     counts["PPO / Full-time Offer"] += 1
                 elif eval_data["score"] >= 75:
@@ -882,7 +985,10 @@ class AdminDashboardService:
         alerts: List[SecurityAlertItem] = []
 
         # 1. Device Violations (REJECTED / REVOKED)
-        flagged_devices = db.query(Device).filter(
+        flagged_devices = db.query(Device).options(
+            joinedload(Device.user),
+            joinedload(Device.student)
+        ).filter(
             Device.status.in_(["REJECTED", "REVOKED"])
         ).order_by(Device.created_at.desc()).limit(20).all()
 
@@ -904,7 +1010,10 @@ class AdminDashboardService:
             ))
 
         # 2. GPS / Geofence Accuracy & Boundary Breaches
-        events = db.query(AttendanceEvent).filter(
+        events = db.query(AttendanceEvent).options(
+            joinedload(AttendanceEvent.student),
+            joinedload(AttendanceEvent.user)
+        ).filter(
             or_(AttendanceEvent.is_geofence_valid == False, AttendanceEvent.distance_from_geofence_meters > 100)
         ).order_by(AttendanceEvent.timestamp.desc()).limit(20).all()
 
@@ -926,7 +1035,10 @@ class AdminDashboardService:
             ))
 
         # 3. Biometric Anomalies (Face mismatch / Liveness score below threshold)
-        bio_events = db.query(AttendanceEvent).filter(
+        bio_events = db.query(AttendanceEvent).options(
+            joinedload(AttendanceEvent.student),
+            joinedload(AttendanceEvent.user)
+        ).filter(
             or_(AttendanceEvent.face_match_confidence < 0.70, AttendanceEvent.liveness_score < 0.80)
         ).order_by(AttendanceEvent.timestamp.desc()).limit(20).all()
 
@@ -971,7 +1083,9 @@ class AdminDashboardService:
         Query the immutable AuditLog table with joined actor details.
         """
         total = db.query(AuditLog).count()
-        logs = db.query(AuditLog).order_by(AuditLog.timestamp.desc()).offset(skip).limit(limit).all()
+        logs = db.query(AuditLog).options(
+            joinedload(AuditLog.actor)
+        ).order_by(AuditLog.timestamp.desc()).offset(skip).limit(limit).all()
 
         items = []
         for l in logs:

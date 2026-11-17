@@ -13,11 +13,11 @@ interface FaceEnrollmentModalProps {
 }
 
 const SAMPLE_GUIDES = [
-  'Look directly at camera (Front View)',
-  'Turn head slightly or smile naturally',
-  'Neutral relaxed expression',
-  'Slight left or right tilt (Optional)',
-  'Final reference sample (Optional)',
+  'Photo 1: Look directly at camera (Front View)',
+  'Photo 2: Turn head slightly left (Slight Left View)',
+  'Photo 3: Turn head slightly right (Slight Right View)',
+  'Photo 4: Neutral relaxed expression (Optional)',
+  'Photo 5: Final reference sample (Optional)',
 ];
 
 export const FaceEnrollmentModal: React.FC<FaceEnrollmentModalProps> = ({
@@ -92,13 +92,20 @@ export const FaceEnrollmentModal: React.FC<FaceEnrollmentModalProps> = ({
     if (capturedSamples.length >= 5) return;
 
     if (videoRef.current && videoRef.current.videoWidth > 0) {
+      const video = videoRef.current;
       const canvas = document.createElement('canvas');
-      canvas.width = videoRef.current.videoWidth;
-      canvas.height = videoRef.current.videoHeight;
+      // High-speed optimization: scale down high-res webcam frames to optimal 480px width
+      // Reduces base64 upload payload from ~7.5MB to ~120KB, making enrollment near-instant
+      const maxDim = 480;
+      const scale = Math.min(1.0, maxDim / Math.max(video.videoWidth, video.videoHeight));
+      canvas.width = Math.round(video.videoWidth * scale);
+      canvas.height = Math.round(video.videoHeight * scale);
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'medium';
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
         setCapturedSamples((prev) => [...prev, dataUrl]);
       }
     } else {
@@ -185,7 +192,7 @@ export const FaceEnrollmentModal: React.FC<FaceEnrollmentModalProps> = ({
       onSuccess();
       setTimeout(() => {
         onClose();
-      }, 1400);
+      }, 600);
     } catch (err: any) {
       setError(err.message || 'Failed to enroll facial template.');
     } finally {

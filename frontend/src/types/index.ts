@@ -80,6 +80,8 @@ export type InstallmentType = 'ONE_TIME' | 'TWO_INSTALLMENTS';
 export interface Student {
   id: string;
   user_id: string;
+  name?: string | null;
+  full_name?: string | null;
   program_id?: string | null;
   batch_id?: string | null;
   mentor_id?: string | null;

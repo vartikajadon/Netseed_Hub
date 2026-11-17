@@ -192,6 +192,8 @@ class BatchResponse(BatchBase):
 # --- STUDENT SCHEMAS ---
 class StudentBase(BaseModel):
     user_id: str
+    name: Optional[str] = None
+    full_name: Optional[str] = None
     program_id: Optional[str] = None
     batch_id: Optional[str] = None
     mentor_id: Optional[str] = None
@@ -232,6 +234,7 @@ class StudentBase(BaseModel):
 
 class StudentCreate(BaseModel):
     user_id: Optional[str] = None
+    name: Optional[str] = None
     full_name: Optional[str] = None
     email: Optional[str] = None
     program_id: Optional[str] = None
@@ -294,6 +297,7 @@ class StudentCreate(BaseModel):
             return None
 
 class StudentUpdate(BaseModel):
+    name: Optional[str] = None
     full_name: Optional[str] = None
     email: Optional[str] = None
     avatar_url: Optional[str] = None

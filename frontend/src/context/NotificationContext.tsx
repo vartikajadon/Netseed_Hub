@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { api } from '../api/client';
 import { useAuth } from './AuthContext';
+import { subscribeToRealtimeTable } from '../lib/supabase';
 import { NotificationItem, NotificationType, NotificationCreatePayload } from '../types';
 
 export interface ToastItem {
@@ -56,12 +57,34 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   useEffect(() => {
     fetchNotifications();
 
-    // Poll for new notifications every 20 seconds
-    const interval = setInterval(() => {
-      fetchNotifications();
-    }, 20000);
+    // 1. Instant Realtime push subscription via Supabase WebSocket
+    const sub = subscribeToRealtimeTable({
+      table: 'notifications',
+      onChange: () => {
+        fetchNotifications();
+      },
+    });
 
-    return () => clearInterval(interval);
+    // 2. Fetch immediately when user switches back to this tab
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchNotifications();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // 3. Fallback heartbeat every 60s (only when tab is actively visible)
+    const interval = setInterval(() => {
+      if (!document.hidden) {
+        fetchNotifications();
+      }
+    }, 60000);
+
+    return () => {
+      sub.unsubscribe();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(interval);
+    };
   }, [fetchNotifications]);
 
   const dismissToast = (id: string) => {

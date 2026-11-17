@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { Card } from '../components/Card';
@@ -74,7 +74,7 @@ export const HRStudentManagement: React.FC = () => {
     }
   };
 
-  const fetchStudents = async () => {
+  const fetchStudents = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
@@ -95,7 +95,7 @@ export const HRStudentManagement: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [search, selectedProgram, selectedBatchType, selectedMentor, selectedStatus, skip]);
 
   useEffect(() => {
     fetchFilters();
@@ -103,7 +103,7 @@ export const HRStudentManagement: React.FC = () => {
 
   useEffect(() => {
     fetchStudents();
-  }, [search, selectedProgram, selectedBatchType, selectedMentor, selectedStatus, skip]);
+  }, [fetchStudents]);
 
   const handleRemoveStudent = async () => {
     if (!removingStudent) return;

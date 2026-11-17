@@ -1,3 +1,11 @@
+import sys
+from pathlib import Path
+
+# Ensure 'backend' directory is in sys.path regardless of execution directory
+_backend_dir = str(Path(__file__).resolve().parent.parent)
+if _backend_dir not in sys.path:
+    sys.path.insert(0, _backend_dir)
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -90,6 +98,10 @@ def run_db_setup():
         "ALTER TABLE students ADD COLUMN IF NOT EXISTS project_status VARCHAR(50) DEFAULT 'NOT_ASSIGNED'",
         "ALTER TABLE students ADD COLUMN IF NOT EXISTS project_assigned_at TIMESTAMP",
         "ALTER TABLE students ADD COLUMN IF NOT EXISTS project_submitted_at TIMESTAMP",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS name VARCHAR(255)",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS full_name VARCHAR(255)",
+        "UPDATE students SET name = (SELECT full_name FROM users WHERE users.id = students.user_id) WHERE students.name IS NULL",
+        "UPDATE students SET full_name = (SELECT full_name FROM users WHERE users.id = students.user_id) WHERE students.full_name IS NULL",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_latitude NUMERIC(10, 8)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_longitude NUMERIC(11, 8)",
@@ -129,6 +141,30 @@ def run_db_setup():
             average_rating NUMERIC(3, 2),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )""",
+        # High-performance secondary indexes for FKs, filtering, and ordering
+        "CREATE INDEX IF NOT EXISTS idx_students_user_id ON students(user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_students_roll_number ON students(roll_number)",
+        "CREATE INDEX IF NOT EXISTS idx_students_program_id ON students(program_id)",
+        "CREATE INDEX IF NOT EXISTS idx_students_batch_id ON students(batch_id)",
+        "CREATE INDEX IF NOT EXISTS idx_students_mentor_id ON students(mentor_id)",
+        "CREATE INDEX IF NOT EXISTS idx_students_enrollment_status ON students(enrollment_status)",
+        "CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)",
+        "CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)",
+        "CREATE INDEX IF NOT EXISTS idx_attendance_daily_student_id ON attendance_daily_records(student_id)",
+        "CREATE INDEX IF NOT EXISTS idx_attendance_daily_date ON attendance_daily_records(date)",
+        "CREATE INDEX IF NOT EXISTS idx_attendance_daily_status ON attendance_daily_records(status)",
+        "CREATE INDEX IF NOT EXISTS idx_attendance_events_student_id ON attendance_events(student_id)",
+        "CREATE INDEX IF NOT EXISTS idx_attendance_events_user_id ON attendance_events(user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_attendance_events_timestamp ON attendance_events(timestamp)",
+        "CREATE INDEX IF NOT EXISTS idx_attendance_events_fingerprint ON attendance_events(device_fingerprint)",
+        "CREATE INDEX IF NOT EXISTS idx_devices_student_id ON devices(student_id)",
+        "CREATE INDEX IF NOT EXISTS idx_devices_fingerprint ON devices(device_fingerprint)",
+        "CREATE INDEX IF NOT EXISTS idx_batches_program_id ON batches(program_id)",
+        "CREATE INDEX IF NOT EXISTS idx_face_templates_student_id ON face_templates(student_id)",
+        "CREATE INDEX IF NOT EXISTS idx_face_templates_user_id ON face_templates(user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_regularization_student_id ON regularization_requests(student_id)",
+        "CREATE INDEX IF NOT EXISTS idx_audit_logs_actor_id ON audit_logs(actor_id)",
+        "CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp)",
     ]
 
     try:
@@ -161,9 +197,12 @@ def run_db_setup():
         # Ensure baseline users, batches, programs, and geofences are populated if empty
         try:
             from app.database.session import SessionLocal
+            from app.models.all_models import User
             from app.database.init_seed import ensure_baseline_data
             db = SessionLocal()
-            ensure_baseline_data(db)
+            # Fast check: skip 40+ database roundtrips if core seed records already exist
+            if not db.query(User.id).filter(User.id == "usr-admin-001").first():
+                ensure_baseline_data(db)
             db.close()
         except Exception as seed_err:
             logger.warning(f"Baseline seed verification note: {seed_err}")
@@ -196,6 +235,13 @@ def run_db_setup():
             db.close()
         except Exception as ex:
             logger.debug(f"Face template startup migration note: {ex}")
+        # Pre-warm face recognition models during startup to eliminate cold-start delay on first registration
+        try:
+            from app.services.face_verification_service import get_insightface_app, _get_haar_cascade
+            get_insightface_app()
+            _get_haar_cascade()
+        except Exception as ex:
+            logger.debug(f"Face pipeline warmup note: {ex}")
     except Exception as e:
         logger.warning(f"Database setup connection warning: {e}")
 

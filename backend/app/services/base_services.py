@@ -606,6 +606,9 @@ class StudentService:
             if data.enrollment_status:
                 existing_student.enrollment_status = data.enrollment_status
             
+            existing_student.name = (data.full_name or user.full_name or target_name).strip()
+            existing_student.full_name = existing_student.name
+            
             updated = self.repo.update(existing_student)
             sync_student_birthday_event(self.repo.db, updated)
             self.audit_repo.create(AuditLog(
@@ -649,9 +652,12 @@ class StudentService:
         status_val = data.enrollment_status if data.enrollment_status in valid_statuses else "ENROLLED"
 
         norm_bt = normalize_batch_type(data.batch_type)
+        st_resolved_name = (data.full_name or data.name or user.full_name or target_name).strip()
 
         student = Student(
             user_id=user_id,
+            name=st_resolved_name,
+            full_name=st_resolved_name,
             program_id=data.program_id,
             batch_id=data.batch_id,
             mentor_id=data.mentor_id,
@@ -696,16 +702,19 @@ class StudentService:
         old_val = f"program={student.program_id}, batch={student.batch_id}, mentor={student.mentor_id}, status={student.enrollment_status}"
 
         # Sync user full_name, email, and avatar_url if updated
-        if data.full_name or data.email or data.avatar_url is not None:
+        if data.full_name or data.name or data.email or data.avatar_url is not None:
             user = self.user_repo.get_by_id(student.user_id)
             if user:
-                if data.full_name:
-                    user.full_name = data.full_name.strip()
+                if data.full_name or data.name:
+                    user.full_name = (data.full_name or data.name).strip()
                 if data.email:
                     user.email = data.email.strip().lower()
                 if data.avatar_url is not None:
                     user.avatar_url = data.avatar_url.strip() if data.avatar_url else None
                 self.user_repo.update(user)
+            if data.full_name or data.name:
+                student.name = (data.full_name or data.name).strip()
+                student.full_name = student.name
 
         target_program_id = data.program_id or student.program_id
         target_batch_id = data.batch_id or student.batch_id

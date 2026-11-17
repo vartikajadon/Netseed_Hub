@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.core.auth import get_current_user
 from app.core.permissions import require_hr
+from app.core.cache import STATIC_METADATA_CACHE, DASHBOARD_METRICS_CACHE
 from app.models.all_models import User
 from app.schemas.all_schemas import BatchResponse, BatchCreate, BatchUpdate
 from app.services.base_services import BatchService
@@ -23,8 +24,15 @@ def list_batches(
     - MENTOR role sees batches assigned to them.
     - All other roles see active batches.
     """
-    service = BatchService(db)
-    all_batches = service.list_batches(program_id=program_id, skip=skip, limit=limit)
+    cache_key = f"batches_{program_id}_{skip}_{limit}"
+    cached = STATIC_METADATA_CACHE.get(cache_key)
+    if cached is None:
+        service = BatchService(db)
+        all_batches = service.list_batches(program_id=program_id, skip=skip, limit=limit)
+        STATIC_METADATA_CACHE.set(cache_key, all_batches)
+    else:
+        all_batches = cached
+
     if current_user.role == "MENTOR":
         return [b for b in all_batches if b.mentor_id == current_user.id]
     return all_batches
@@ -45,7 +53,10 @@ def create_batch(
     db: Session = Depends(get_db)
 ):
     service = BatchService(db)
-    return service.create_batch(data, actor_id=current_user.id)
+    created = service.create_batch(data, actor_id=current_user.id)
+    STATIC_METADATA_CACHE.clear()
+    DASHBOARD_METRICS_CACHE.clear()
+    return created
 
 @router.put("/{batch_id}", response_model=BatchResponse)
 @router.patch("/{batch_id}", response_model=BatchResponse)
@@ -56,4 +67,7 @@ def update_batch(
     db: Session = Depends(get_db)
 ):
     service = BatchService(db)
-    return service.update_batch(batch_id, data, actor_id=current_user.id)
+    updated = service.update_batch(batch_id, data, actor_id=current_user.id)
+    STATIC_METADATA_CACHE.clear()
+    DASHBOARD_METRICS_CACHE.clear()
+    return updated

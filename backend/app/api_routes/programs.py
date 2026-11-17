@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.core.auth import get_current_user
 from app.core.permissions import require_hr
+from app.core.cache import STATIC_METADATA_CACHE, DASHBOARD_METRICS_CACHE
 from app.models.all_models import User
 from app.schemas.all_schemas import ProgramResponse, ProgramCreate, ProgramUpdate
 from app.services.base_services import ProgramService
@@ -18,8 +19,15 @@ def list_programs(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    cache_key = f"programs_{skip}_{limit}"
+    cached = STATIC_METADATA_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
     service = ProgramService(db)
-    return service.list_programs(skip=skip, limit=limit)
+    result = service.list_programs(skip=skip, limit=limit)
+    STATIC_METADATA_CACHE.set(cache_key, result)
+    return result
 
 @router.get("/{program_id}", response_model=ProgramResponse)
 def get_program(
@@ -37,7 +45,10 @@ def create_program(
     db: Session = Depends(get_db)
 ):
     service = ProgramService(db)
-    return service.create_program(data, actor_id=current_user.id)
+    created = service.create_program(data, actor_id=current_user.id)
+    STATIC_METADATA_CACHE.clear()
+    DASHBOARD_METRICS_CACHE.clear()
+    return created
 
 @router.put("/{program_id}", response_model=ProgramResponse)
 @router.patch("/{program_id}", response_model=ProgramResponse)
@@ -48,7 +59,10 @@ def update_program(
     db: Session = Depends(get_db)
 ):
     service = ProgramService(db)
-    return service.update_program(program_id, data, actor_id=current_user.id)
+    updated = service.update_program(program_id, data, actor_id=current_user.id)
+    STATIC_METADATA_CACHE.clear()
+    DASHBOARD_METRICS_CACHE.clear()
+    return updated
 
 @router.delete("/{program_id}", status_code=status.HTTP_200_OK)
 def delete_program(
@@ -60,7 +74,10 @@ def delete_program(
     Delete a training program. Restricted to HR and SUPER_ADMIN.
     """
     service = ProgramService(db)
-    return service.delete_program(program_id, actor_id=current_user.id)
+    res = service.delete_program(program_id, actor_id=current_user.id)
+    STATIC_METADATA_CACHE.clear()
+    DASHBOARD_METRICS_CACHE.clear()
+    return res
 
 
 # -------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 from typing import List, Optional, Tuple
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.models.all_models import (
     User, Program, Batch, Geofence, Student, Device, Consent, FaceTemplate, AuditLog
 )
@@ -110,13 +110,28 @@ class StudentRepository:
         self.db = db
 
     def get_by_id(self, student_id: str) -> Optional[Student]:
-        return self.db.query(Student).filter(Student.id == student_id).first()
+        return self.db.query(Student).options(
+            joinedload(Student.user),
+            joinedload(Student.program),
+            joinedload(Student.batch),
+            joinedload(Student.mentor)
+        ).filter(Student.id == student_id).first()
 
     def get_by_user_id(self, user_id: str) -> Optional[Student]:
-        return self.db.query(Student).filter(Student.user_id == user_id).first()
+        return self.db.query(Student).options(
+            joinedload(Student.user),
+            joinedload(Student.program),
+            joinedload(Student.batch),
+            joinedload(Student.mentor)
+        ).filter(Student.user_id == user_id).first()
 
     def get_by_roll_number(self, roll_number: str) -> Optional[Student]:
-        return self.db.query(Student).filter(Student.roll_number == roll_number).first()
+        return self.db.query(Student).options(
+            joinedload(Student.user),
+            joinedload(Student.program),
+            joinedload(Student.batch),
+            joinedload(Student.mentor)
+        ).filter(Student.roll_number == roll_number).first()
 
     def get_all(
         self,
@@ -129,7 +144,12 @@ class StudentRepository:
         skip: int = 0,
         limit: int = 100
     ) -> Tuple[List[Student], int]:
-        query = self.db.query(Student).join(User, Student.user_id == User.id)
+        query = self.db.query(Student).options(
+            joinedload(Student.user),
+            joinedload(Student.program),
+            joinedload(Student.batch),
+            joinedload(Student.mentor)
+        ).join(User, Student.user_id == User.id)
 
         if search:
             pattern = f"%{search}%"

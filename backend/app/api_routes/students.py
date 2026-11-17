@@ -532,6 +532,8 @@ def _process_student_rows(
                 # Update existing student
                 student.roll_number = roll
                 student.user_id = user.id
+                student.name = user.full_name or name
+                student.full_name = student.name
                 if program_id:
                     student.program_id = program_id
                 if batch_id:
@@ -566,6 +568,8 @@ def _process_student_rows(
                 # Create brand new student
                 new_student = Student(
                     user_id=user.id,
+                    name=user.full_name or name,
+                    full_name=user.full_name or name,
                     roll_number=roll,
                     program_id=program_id,
                     batch_id=batch_id,

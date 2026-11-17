@@ -149,13 +149,18 @@ def ensure_baseline_data(db: Session):
             ("ad1205a8-28f8-4067-85ca-ea94a1d582a3", "8930804b-92b4-476b-80f4-074e66f99c32", "prog-fse-001", "batch-2026-a", "usr-mentor-001", "NL-2026-748", "sirt", "B.Tech Computer Science", "Madhya Pradesh", "TECH_MASTER", 60000, "ONLINE", "ONE_TIME", "ACTIVE", "NOT_ENROLLED"),
         ]
 
+        user_name_map = {uid: name for uid, email, name, role, phone, p_hash in users_data}
+
         for sid, uid, pid, bid, mid, roll, col, qual, dom, btype, fees, pmode, itype, stat, fstat in students_seed:
             st = db.query(Student).filter(Student.id == sid).first()
             if not st:
                 st = db.query(Student).filter(Student.roll_number == roll).first()
+            st_name = user_name_map.get(uid)
             if not st:
                 st = Student(
                     id=sid,
+                    name=st_name,
+                    full_name=st_name,
                     user_id=uid,
                     program_id=pid,
                     batch_id=bid,
@@ -174,6 +179,10 @@ def ensure_baseline_data(db: Session):
                     face_enrollment_status=fstat
                 )
                 db.add(st)
+            else:
+                if st_name and (not st.name or not st.full_name):
+                    st.name = st_name
+                    st.full_name = st_name
 
         # 6. Consents & Face Templates for enrolled students
         enrolled_templates = [

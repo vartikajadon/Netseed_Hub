@@ -1,5 +1,4 @@
 import React, { useState, useRef } from 'react';
-import * as XLSX from 'xlsx';
 import { Modal } from './Modal';
 import { Button } from './Button';
 import { ErrorMessage } from './ErrorMessage';
@@ -70,7 +69,8 @@ export const StudentExcelImportModal: React.FC<StudentExcelImportModalProps> = (
   } | null>(null);
 
   // Generate & Download Excel Template using SheetJS
-  const handleDownloadTemplate = () => {
+  const handleDownloadTemplate = async () => {
+    const XLSX = await import('xlsx');
     const templateData = [
       {
         'Roll Number': 'NL-2026-FSD-01',
@@ -177,8 +177,9 @@ export const StudentExcelImportModal: React.FC<StudentExcelImportModalProps> = (
     setSelectedFile(file);
 
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       try {
+        const XLSX = await import('xlsx');
         const bstr = evt.target?.result;
         const wb = XLSX.read(bstr, { type: 'binary', cellDates: true });
         const wsname = wb.SheetNames[0];

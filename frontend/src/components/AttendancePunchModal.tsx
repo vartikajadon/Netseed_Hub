@@ -214,12 +214,16 @@ export const AttendancePunchModal: React.FC<AttendancePunchModalProps> = ({
       if (videoRef.current && isCameraActive && videoRef.current.videoWidth > 0) {
         const video = videoRef.current;
         const canvas = canvasRef.current || document.createElement('canvas');
-        canvas.width = video.videoWidth || 640;
-        canvas.height = video.videoHeight || 480;
+        const maxDim = 480;
+        const scale = Math.min(1.0, maxDim / Math.max(video.videoWidth || 640, video.videoHeight || 480));
+        canvas.width = Math.round((video.videoWidth || 640) * scale);
+        canvas.height = Math.round((video.videoHeight || 480) * scale);
         const ctx = canvas.getContext('2d');
         if (ctx) {
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'medium';
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          const photoBase64 = canvas.toDataURL('image/jpeg', 0.85);
+          const photoBase64 = canvas.toDataURL('image/jpeg', 0.82);
           setCapturedPhoto(photoBase64);
           setIsLivenessPassed(true);
           return photoBase64;

@@ -99,6 +99,16 @@ if (typeof window !== 'undefined') {
       fetch(`${baseUrl}/health`, { mode: 'cors' }).catch(() => {});
     } catch {}
   }, 150);
+
+  // Keep serverless instance warm every 4 minutes while tab is active to eliminate 3-8s cold starts
+  setInterval(() => {
+    if (!document.hidden) {
+      try {
+        const baseUrl = getApiBaseUrl();
+        fetch(`${baseUrl}/health`, { mode: 'cors' }).catch(() => {});
+      } catch {}
+    }
+  }, 4 * 60 * 1000);
 }
 
 function getSessionCache<T>(key: string, ttl: number): { data: T; timestamp: number } | null {
