@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { isStaffUser } from '../utils/geolocation';
 
 export type LocationPermissionState = 'prompt' | 'granted' | 'denied' | 'unsupported' | 'checking';
 
@@ -41,7 +42,8 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Monitor permission query status where supported (Chrome, Edge, Firefox, Android)
   const checkPermissionState = useCallback(async () => {
-    if (typeof window === 'undefined' || !navigator.geolocation) {
+    // Exempt ADMIN, HR, and MENTOR roles from location permission tracking
+    if (isStaffUser() || typeof window === 'undefined' || !navigator.geolocation) {
       setPermissionState('unsupported');
       return;
     }
@@ -72,6 +74,11 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const requestExplicitLocation = useCallback(
     async (forcePrompt = true): Promise<{ success: boolean; coords?: LocationCoordinates; error?: string }> => {
+      // Do not prompt or request location from ADMIN, HR, or MENTORS
+      if (isStaffUser()) {
+        return { success: false, error: 'Staff members (Admin, HR, Mentor) do not require location permissions.' };
+      }
+
       if (typeof window === 'undefined' || !navigator.geolocation) {
         const err = 'Geolocation is not supported by your browser or device.';
         setErrorMessage(err);
@@ -158,7 +165,9 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         hasPrompted,
         requestExplicitLocation,
         showPermissionModal,
-        openPermissionModal: () => setShowPermissionModal(true),
+        openPermissionModal: () => {
+          if (!isStaffUser()) setShowPermissionModal(true);
+        },
         closePermissionModal: () => setShowPermissionModal(false),
       }}
     >

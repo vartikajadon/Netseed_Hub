@@ -11,12 +11,39 @@ export interface CapturedLocation {
 }
 
 /**
+ * Returns true if the user belongs to staff roles (Admin, HR, Mentor),
+ * who are strictly exempted from location prompts.
+ */
+export const isStaffUser = (): boolean => {
+  try {
+    const raw = localStorage.getItem('user_data');
+    if (!raw) return false;
+    const user = JSON.parse(raw);
+    return Boolean(user?.role && ['SUPER_ADMIN', 'ADMIN', 'HR', 'MENTOR'].includes(user.role.toUpperCase()));
+  } catch {
+    return false;
+  }
+};
+
+/**
  * Capture current GPS coordinates using the HTML5 Geolocation API.
  * Safely resolves within timeoutMs even if permission is denied, timed out,
  * or unavailable, ensuring authentication flows are never hard-blocked.
+ * 
+ * Strict rule: NEVER prompts ADMIN, HR, or MENTORS for location permission.
  */
-export const captureCurrentLocation = (timeoutMs = 1200): Promise<CapturedLocation> => {
-  return new Promise((resolve) => {
+export const captureCurrentLocation = async (timeoutMs = 1200): Promise<CapturedLocation> => {
+  // 1. Immediately bypass location capture for Admin, HR, and Mentor roles
+  if (isStaffUser()) {
+    return {
+      latitude: null,
+      longitude: null,
+      accuracy: null,
+      error: 'Location capture disabled for staff roles (ADMIN, HR, MENTOR)',
+    };
+  }
+
+  return new Promise(async (resolve) => {
     if (typeof window === 'undefined' || !navigator.geolocation) {
       resolve({
         latitude: null,
@@ -44,6 +71,25 @@ export const captureCurrentLocation = (timeoutMs = 1200): Promise<CapturedLocati
         }
       }
     } catch {}
+
+    // Check if permission is pre-granted before triggering native prompt
+    if ('permissions' in navigator && navigator.permissions?.query) {
+      try {
+        const permStatus = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+        if (permStatus.state !== 'granted') {
+          // Do not force a permission prompt on unsuspecting users
+          resolve({
+            latitude: null,
+            longitude: null,
+            accuracy: null,
+            error: 'Location permission not pre-granted',
+          });
+          return;
+        }
+      } catch {
+        // Fall through if permissions.query fails
+      }
+    }
 
     let isResolved = false;
 

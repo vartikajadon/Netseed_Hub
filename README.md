@@ -157,7 +157,7 @@ Start the FastAPI application server:
 
 ```bash
 cd backend
-python -m uvicorn app.main:app --reload --port 8000
+python -m uvicorn app.main:app --reload --reload-dir app --port 8000
 ```
 
 - **Interactive API Documentation (Swagger)**: [http://localhost:8000/docs](http://localhost:8000/docs)
@@ -236,5 +236,5 @@ Start the FastAPI application server:
 
 ```bash
 cd backend
-python -m uvicorn app.main:app --reload --port 8000
+python -m uvicorn app.main:app --reload --reload-dir app --port 8000
 ```

@@ -1,15 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useLocation } from '../context/LocationContext';
-import { LocationAccessPrompt } from '../components/LocationAccessPrompt';
 import { Button } from '../components/Button';
 import { ErrorMessage } from '../components/ErrorMessage';
 import {
   Shield,
   KeyRound,
   CheckCircle2,
-  MapPin,
   Eye,
   EyeOff,
   Mail,
@@ -29,7 +26,6 @@ export const Login: React.FC = () => {
   const [showHelpModal, setShowHelpModal] = useState(false);
 
   const { login, getDashboardRoute } = useAuth();
-  const { coords, permissionState, requestExplicitLocation } = useLocation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -112,9 +108,6 @@ export const Login: React.FC = () => {
             </p>
           </div>
         </div>
-
-        {/* Explicit Location Access Card */}
-        <LocationAccessPrompt variant="card" />
 
         {/* Login Main Card */}
         <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-md rounded-3xl border border-slate-200/90 dark:border-slate-800 p-6 sm:p-8 shadow-xl shadow-slate-200/50 dark:shadow-none">
@@ -219,7 +212,7 @@ export const Login: React.FC = () => {
               </div>
             </div>
 
-            {/* Remember me & Security notice */}
+            {/* Remember me */}
             <div className="flex items-center justify-between text-xs pt-1">
               <label className="flex items-center gap-2 cursor-pointer select-none text-slate-600 dark:text-slate-400">
                 <input
@@ -230,11 +223,6 @@ export const Login: React.FC = () => {
                 />
                 <span className="font-medium text-[11px]">Remember email</span>
               </label>
-
-              <div className="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-                <MapPin className="w-3.5 h-3.5 text-sky-500 shrink-0" />
-                <span>GPS Audit Active</span>
-              </div>
             </div>
 
             {/* Submit Button */}
@@ -245,7 +233,7 @@ export const Login: React.FC = () => {
               isLoading={isLoading}
             >
               <KeyRound className="w-4 h-4 mr-2" />
-              {isLoading ? 'Verifying Credentials & Location...' : 'Sign In to Account'}
+              {isLoading ? 'Verifying Credentials...' : 'Sign In to Account'}
             </Button>
           </form>
         </div>

@@ -78,13 +78,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const currentUser = await api.get<User>('/auth/me');
       setUser(currentUser);
       localStorage.setItem('user_data', JSON.stringify(currentUser));
-    } catch (err) {
-      console.warn('Authentication session validation failed:', err);
-      // Only clear if definitely unauthorized
-      setUser(null);
-      setToken(null);
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('user_data');
+    } catch (err: any) {
+      console.warn('Authentication session validation note:', err);
+      // Only clear credentials if the server explicitly confirmed the token is unauthorized (401 / 403)
+      const status = err?.status ?? err?.response?.status;
+      if (status === 401 || status === 403) {
+        setUser(null);
+        setToken(null);
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('user_data');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -113,16 +116,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password?: string): Promise<User> => {
     setIsLoading(true);
     try {
-      // 1. Capture user geolocation at login (snappy fallback with 1000ms timeout)
-      const loc = await captureCurrentLocation(1000);
+      // 1. Get cached geolocation if already available without prompting
+      let locLat: number | null = null;
+      let locLon: number | null = null;
+      let locAcc: number | null = null;
+      try {
+        const cached = sessionStorage.getItem('netseed_last_known_coords');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          locLat = parsed.latitude ?? null;
+          locLon = parsed.longitude ?? null;
+          locAcc = parsed.accuracy ?? null;
+        }
+      } catch {}
 
-      // 2. Authenticate against Backend API with captured location
+      // 2. Authenticate against Backend API (no location prompt forced)
       const authResult = await api.post<{ access_token: string; user: User }>('/auth/login', {
         email,
         password: password || 'default_password',
-        latitude: loc.latitude,
-        longitude: loc.longitude,
-        accuracy: loc.accuracy,
+        latitude: locLat,
+        longitude: locLon,
+        accuracy: locAcc,
       });
 
       const newToken = authResult.access_token;
@@ -152,8 +166,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async () => {
     setIsLoading(true);
     try {
-      // 1. Capture user geolocation at logout (quick non-blocking 600ms timeout)
-      const loc = await captureCurrentLocation(600);
+      // Staff (ADMIN, HR, MENTOR) are never prompted for location
+      const isStaff = user?.role && ['SUPER_ADMIN', 'ADMIN', 'HR', 'MENTOR'].includes(user.role.toUpperCase());
+      const loc = !isStaff ? await captureCurrentLocation(600) : { latitude: null, longitude: null, accuracy: null };
 
       try {
         await api.post('/auth/logout', {

@@ -12,7 +12,6 @@ from app.models.all_models import (
     User, Student, Geofence, Batch, Consent, FaceTemplate,
     AttendanceEvent, AttendanceDailyRecord, RegularizationRequest, AuditLog
 )
-from app.services.face_verification_service import FaceVerificationService
 
 # Configurable Netlink Software Group America Inc. Office Geofence Coordinates
 DEFAULT_NETLINK_LATITUDE = settings.NETLINK_OFFICE_LAT
@@ -125,6 +124,7 @@ class AttendanceService:
             db.flush()
 
         # 2. Extract Biometric Feature Vector (Zero Raw Image Storage)
+        from app.services.face_verification_service import FaceVerificationService
         vector = None
         sample_count = 1
         computed_quality = quality_score
@@ -379,6 +379,7 @@ class AttendanceService:
             )
 
         # 4. Strict Biometric Face Verification (Face Detection + Liveness + ArcFace)
+        from app.services.face_verification_service import FaceVerificationService
         is_verified, match_score, reason = FaceVerificationService.verify_live_face_against_template(
             db=db,
             face_tmpl=face_tmpl,

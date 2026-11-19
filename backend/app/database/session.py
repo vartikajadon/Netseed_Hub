@@ -16,6 +16,11 @@ if not db_url or db_url.startswith("sqlite"):
     is_sqlite = True
     db_url = SQLITE_DEFAULT_URL
     connect_args = {"check_same_thread": False}
+    engine = create_engine(
+        db_url,
+        connect_args=connect_args,
+        pool_pre_ping=True
+    )
 else:
     if db_url.startswith("postgresql://"):
         db_url = db_url.replace("postgresql://", "postgresql+psycopg://", 1)
@@ -48,34 +53,13 @@ else:
     engine_kwargs.setdefault("pool_pre_ping", True)
     engine_kwargs.setdefault("pool_timeout", 10)
 
-    # Pre-flight check: verify that the remote database is actually reachable and responsive
-    try:
-        test_engine = create_engine(
-            db_url,
-            connect_args=connect_args,
-            **engine_kwargs
-        )
-        with test_engine.connect() as test_conn:
-            test_conn.execute(text("SELECT 1"))
-        engine = test_engine
-        logger.info("Successfully connected to primary PostgreSQL database.")
-    except Exception as e:
-        logger.warning(
-            f"Primary PostgreSQL database connection failed ({e}). "
-            f"Activating resilient SQLite database at {SQLITE_DEFAULT_URL}."
-        )
-        is_sqlite = True
-        db_url = SQLITE_DEFAULT_URL
-        connect_args = {"check_same_thread": False}
-        engine_kwargs = {"pool_pre_ping": True}
-
-if is_sqlite:
     engine = create_engine(
         db_url,
         connect_args=connect_args,
         **engine_kwargs
     )
 
+if is_sqlite:
     @event.listens_for(engine, "connect")
     def set_sqlite_pragma(dbapi_connection, connection_record):
         cursor = dbapi_connection.cursor()

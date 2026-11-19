@@ -211,13 +211,14 @@ def run_db_setup():
         try:
             from app.database.session import SessionLocal
             from app.models.all_models import FaceTemplate
-            import json, hashlib, numpy as np
+            import json, hashlib
             db = SessionLocal()
             # Fast check: only inspect unmigrated templates
             unmigrated = db.query(FaceTemplate).filter(
                 ~FaceTemplate.embedding_reference.like('{"vector":%')
             ).all()
             if unmigrated:
+                import numpy as np
                 for tmpl in unmigrated:
                     ref = (tmpl.embedding_reference or "").strip()
                     h = hashlib.sha256((ref or tmpl.student_id or tmpl.id).encode("utf-8")).digest()
@@ -235,13 +236,6 @@ def run_db_setup():
             db.close()
         except Exception as ex:
             logger.debug(f"Face template startup migration note: {ex}")
-        # Pre-warm face recognition models during startup to eliminate cold-start delay on first registration
-        try:
-            from app.services.face_verification_service import get_insightface_app, _get_haar_cascade
-            get_insightface_app()
-            _get_haar_cascade()
-        except Exception as ex:
-            logger.debug(f"Face pipeline warmup note: {ex}")
     except Exception as e:
         logger.warning(f"Database setup connection warning: {e}")
 
@@ -260,18 +254,19 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS Configuration
+# CORS Configuration with 24-hour preflight caching
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    max_age=86400,
 )
 
-# Compression Middleware: automatically gzip compress JSON payloads >= 500 bytes for lightning-fast network delivery
+# Compression Middleware: automatically gzip compress JSON payloads >= 1000 bytes for lightning-fast network delivery
 from starlette.middleware.gzip import GZipMiddleware
-app.add_middleware(GZipMiddleware, minimum_size=500)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 @app.middleware("http")
 async def db_setup_middleware(request: Request, call_next):
@@ -351,4 +346,4 @@ def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app.main:app", host="0.0.0.0", port=settings.PORT, reload=settings.DEBUG)
+    uvicorn.run("app.main:app", host="0.0.0.0", port=settings.PORT, reload=settings.DEBUG, reload_dirs=["app"] if settings.DEBUG else None)

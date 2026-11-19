@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useLocation } from '../context/LocationContext';
+import { isStaffUser } from '../utils/geolocation';
 import { Button } from './Button';
 import {
   MapPin,
@@ -25,6 +26,11 @@ export const LocationAccessPrompt: React.FC<LocationAccessPromptProps> = ({
   onGranted,
   className = '',
 }) => {
+  // Never render or prompt location for Admin, HR, and Mentors
+  if (isStaffUser()) {
+    return null;
+  }
+
   const {
     coords,
     permissionState,
@@ -77,8 +83,13 @@ export const LocationAccessPrompt: React.FC<LocationAccessPromptProps> = ({
     );
   }
 
-  // If user dismissed this session in banner mode:
-  if (isDismissed && variant === 'banner') {
+  // If variant is pill and location is not granted, do not render full banner
+  if (variant === 'pill') {
+    return null;
+  }
+
+  // Banner variant has been disabled/removed per UI requirements
+  if (variant === 'banner' || isDismissed) {
     return null;
   }
 

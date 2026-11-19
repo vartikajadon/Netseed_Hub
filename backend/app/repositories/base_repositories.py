@@ -56,13 +56,19 @@ class ProgramRepository:
         self.db = db
 
     def get_by_id(self, program_id: str) -> Optional[Program]:
-        return self.db.query(Program).filter(Program.id == program_id).first()
+        return self.db.query(Program).options(
+            joinedload(Program.mentor)
+        ).filter(Program.id == program_id).first()
 
     def get_by_code(self, code: str) -> Optional[Program]:
-        return self.db.query(Program).filter(Program.code == code).first()
+        return self.db.query(Program).options(
+            joinedload(Program.mentor)
+        ).filter(Program.code == code).first()
 
     def get_all(self, skip: int = 0, limit: int = 100) -> List[Program]:
-        return self.db.query(Program).offset(skip).limit(limit).all()
+        return self.db.query(Program).options(
+            joinedload(Program.mentor)
+        ).offset(skip).limit(limit).all()
 
     def create(self, program: Program) -> Program:
         self.db.add(program)
@@ -85,10 +91,16 @@ class BatchRepository:
         self.db = db
 
     def get_by_id(self, batch_id: str) -> Optional[Batch]:
-        return self.db.query(Batch).filter(Batch.id == batch_id).first()
+        return self.db.query(Batch).options(
+            joinedload(Batch.program),
+            joinedload(Batch.mentor)
+        ).filter(Batch.id == batch_id).first()
 
     def get_all(self, program_id: Optional[str] = None, skip: int = 0, limit: int = 100) -> List[Batch]:
-        query = self.db.query(Batch)
+        query = self.db.query(Batch).options(
+            joinedload(Batch.program),
+            joinedload(Batch.mentor)
+        )
         if program_id:
             query = query.filter(Batch.program_id == program_id)
         return query.offset(skip).limit(limit).all()

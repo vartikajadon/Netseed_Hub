@@ -7,7 +7,6 @@ import { Button } from './Button';
 import { Modal } from './Modal';
 import { NotificationCenter } from './NotificationCenter';
 import { NotificationToastContainer } from './NotificationToast';
-import { LocationAccessPrompt } from './LocationAccessPrompt';
 import { UserProfileDropdown } from './UserProfileDropdown';
 import { FirstLoginPasswordModal } from './FirstLoginPasswordModal';
 import { AccessSuspendedModal } from './AccessSuspendedModal';
@@ -153,9 +152,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const subNavItems = getSubNavItems();
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200">
+    <div className="h-screen h-[100dvh] bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200 overflow-hidden">
       {/* Top Header Bar */}
-      <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-3 sm:px-6 py-2 sm:py-2.5 flex items-center justify-between shadow-xs">
+      <header className="shrink-0 z-40 bg-white/95 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-3 sm:px-6 py-2 sm:py-2.5 flex items-center justify-between shadow-xs">
         <div className="flex items-center gap-2 sm:gap-4">
           {/* Mobile Menu Hamburger */}
           {subNavItems.length > 0 && (
@@ -190,9 +189,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
         {/* Header Right Actions */}
         <div className="flex items-center gap-1.5 sm:gap-3">
-          {/* Explicit Location Status Pill */}
-          <LocationAccessPrompt variant="pill" className="hidden sm:inline-flex" />
-
           <button
             onClick={toggleTheme}
             className="p-1.5 sm:p-2 min-h-[38px] min-w-[38px] rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-indigo-600 border border-slate-300 dark:bg-slate-800/60 dark:hover:bg-slate-800 dark:text-slate-300 dark:hover:text-amber-400 dark:border-slate-700/60 transition-all flex items-center justify-center gap-1.5 text-xs font-semibold"
@@ -225,12 +221,12 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         </div>
       </header>
 
-      {/* Main Body Container with Sidebar + Content */}
-      <div className="flex-1 flex w-full relative">
-        {/* Desktop Collapsible Sidebar */}
+      {/* Main Body Container with Fixed Sidebar Section + Independent Content Section */}
+      <div className="flex-1 flex w-full min-h-0 overflow-hidden relative">
+        {/* Desktop Collapsible Fixed Sidebar */}
         {subNavItems.length > 0 && (
           <aside
-            className={`hidden md:flex flex-col border-r border-[#0275ad]/40 dark:border-sky-950 bg-gradient-to-b from-[#026c9f] via-[#0284c7] to-[#0369a1] dark:from-[#072438] dark:via-[#093552] dark:to-[#0a4163] text-white transition-all duration-300 sticky top-[57px] h-[calc(100vh-57px)] shrink-0 z-30 select-none shadow-md ${
+            className={`hidden md:flex flex-col border-r border-[#0275ad]/40 dark:border-sky-950 bg-gradient-to-b from-[#026c9f] via-[#0284c7] to-[#0369a1] dark:from-[#072438] dark:via-[#093552] dark:to-[#0a4163] text-white transition-all duration-300 h-full shrink-0 z-30 select-none shadow-md ${
               isCollapsed ? 'w-20 overflow-visible' : 'w-60 overflow-hidden'
             }`}
           >
@@ -379,14 +375,14 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           </div>
         )}
 
-        {/* Content Wrapper */}
-        <div className="flex-1 min-w-0 flex flex-col min-h-[calc(100vh-57px)]">
+        {/* Content Wrapper - Operates as a separate scrolling section */}
+        <div className="flex-1 min-w-0 flex flex-col h-full overflow-y-auto overflow-x-hidden">
           <main className={`flex-1 p-3 sm:p-5 md:p-8 max-w-7xl w-full mx-auto overflow-x-hidden ${role === 'STUDENT' ? 'pb-24 md:pb-8' : 'pb-8'}`}>
             {children}
           </main>
 
           {/* Footer */}
-          <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 py-3 px-6 text-center text-xs text-slate-500 dark:text-slate-400 font-medium" />
+          <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 py-3 px-6 text-center text-xs text-slate-500 dark:text-slate-400 font-medium shrink-0" />
         </div>
       </div>
 
