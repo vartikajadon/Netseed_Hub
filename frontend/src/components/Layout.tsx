@@ -382,8 +382,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         {/* Content Wrapper */}
         <div className="flex-1 min-w-0 flex flex-col min-h-[calc(100vh-57px)]">
           <main className={`flex-1 p-3 sm:p-5 md:p-8 max-w-7xl w-full mx-auto overflow-x-hidden ${role === 'STUDENT' ? 'pb-24 md:pb-8' : 'pb-8'}`}>
-            {/* Global Explicit Location Access Notice (When not yet granted) */}
-            <LocationAccessPrompt variant="banner" className="mb-4" />
             {children}
           </main>
 
