@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import or_, and_
 from app.database.session import get_db
 from app.core.permissions import get_current_user
 from app.models.all_models import User, Notification
@@ -19,14 +19,18 @@ def get_user_notifications(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Fetches in-app notifications for the current authenticated user,
-    including direct notifications and role-broadcasted notifications.
+    Fetches user-specific in-app notifications for the current authenticated user.
+    Strictly prevents leaking other users' notifications:
+    - If a notification is assigned to a specific user_id, only that user can see it.
+    - If user_id is null and target_role is set, only users matching that exact role can see it.
     """
     query = db.query(Notification).filter(
         or_(
             Notification.user_id == current_user.id,
-            Notification.target_role == current_user.role,
-            Notification.target_role.is_(None)
+            and_(
+                Notification.user_id.is_(None),
+                Notification.target_role == current_user.role
+            )
         )
     )
 
@@ -64,7 +68,16 @@ def mark_notification_as_read(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    notif = db.query(Notification).filter(Notification.id == notification_id).first()
+    notif = db.query(Notification).filter(
+        Notification.id == notification_id,
+        or_(
+            Notification.user_id == current_user.id,
+            and_(
+                Notification.user_id.is_(None),
+                Notification.target_role == current_user.role
+            )
+        )
+    ).first()
     if not notif:
         raise HTTPException(status_code=404, detail="Notification not found.")
 
@@ -82,7 +95,10 @@ def mark_all_notifications_read(
     db.query(Notification).filter(
         or_(
             Notification.user_id == current_user.id,
-            Notification.target_role == current_user.role
+            and_(
+                Notification.user_id.is_(None),
+                Notification.target_role == current_user.role
+            )
         ),
         Notification.is_read.is_(False)
     ).update({"is_read": True}, synchronize_session=False)
@@ -97,7 +113,16 @@ def delete_notification(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    notif = db.query(Notification).filter(Notification.id == notification_id).first()
+    notif = db.query(Notification).filter(
+        Notification.id == notification_id,
+        or_(
+            Notification.user_id == current_user.id,
+            and_(
+                Notification.user_id.is_(None),
+                Notification.target_role == current_user.role
+            )
+        )
+    ).first()
     if not notif:
         raise HTTPException(status_code=404, detail="Notification not found.")
 

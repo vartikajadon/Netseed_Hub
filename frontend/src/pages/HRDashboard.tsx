@@ -583,50 +583,6 @@ export const HRDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* QUICK NAVIGATION STRIP */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
-          <span className="text-slate-500 dark:text-slate-400 font-semibold text-[11px] uppercase tracking-wider whitespace-nowrap">
-            Quick Portals:
-          </span>
-          <Link
-            to="/hr/students?action=import"
-            className="px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/80 font-bold whitespace-nowrap transition-colors border border-indigo-200 dark:border-indigo-800/60 flex items-center gap-1.5"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-            <span>Import Students Excel</span>
-          </Link>
-          <Link
-            to="/hr/students"
-            className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 font-bold whitespace-nowrap transition-colors"
-          >
-            Students Roster →
-          </Link>
-          <Link
-            to="/hr/attendance"
-            className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 font-bold whitespace-nowrap transition-colors"
-          >
-            Global Attendance →
-          </Link>
-          <Link
-            to="/hr/fees"
-            className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 font-bold whitespace-nowrap transition-colors"
-          >
-            Fees Management →
-          </Link>
-          <Link
-            to="/calendar"
-            className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 font-bold whitespace-nowrap transition-colors"
-          >
-            Organization Calendar →
-          </Link>
-          <Link
-            to="/hr/programs"
-            className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 font-bold whitespace-nowrap transition-colors"
-          >
-            Programs & Batches →
-          </Link>
-        </div>
-
         {isLoading && <Loading message="Loading HR briefing and operational monitors..." />}
         {error && <ErrorMessage message={error} />}
 
@@ -1151,70 +1107,85 @@ export const HRDashboard: React.FC = () => {
                     </div>
 
                     {filteredTodayAbsentees.length > 0 ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-                        {filteredTodayAbsentees.map((record) => {
-                          const student = record.student;
-                          const name = student?.user?.full_name || 'Enrolled Student';
-                          const roll = student?.roll_number || 'N/A';
-                          const batch = student?.batch?.name || 'Assigned Cohort';
-                          const phone = student?.contact_number || student?.user?.phone;
-                          const email = student?.user?.email;
+                      <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
+                        <table className="w-full text-left text-xs border-collapse">
+                          <thead>
+                            <tr className="bg-slate-50 dark:bg-slate-850 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 font-bold uppercase tracking-wider text-[10px]">
+                              <th className="py-3 px-4">Trainee / Student</th>
+                              <th className="py-3 px-4">Batch</th>
+                              <th className="py-3 px-4">Status</th>
+                              <th className="py-3 px-4">Contact</th>
+                              <th className="py-3 px-4 text-right">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-medium text-slate-700 dark:text-slate-300">
+                            {filteredTodayAbsentees.map((record) => {
+                              const student = record.student;
+                              const name = student?.user?.full_name || 'Enrolled Student';
+                              const roll = student?.roll_number || 'N/A';
+                              const batch = student?.batch?.name || 'Assigned Cohort';
+                              const phone = student?.contact_number || student?.user?.phone;
+                              const email = student?.user?.email;
 
-                          return (
-                            <div
-                              key={record.id}
-                              className="p-4 rounded-2xl bg-rose-50/50 dark:bg-rose-950/15 border border-rose-200/80 dark:border-rose-900/40 flex flex-col justify-between space-y-3"
-                            >
-                              <div className="flex items-start justify-between">
-                                <div className="space-y-0.5">
-                                  <h4 className="font-black text-slate-900 dark:text-slate-100 text-sm">
-                                    {name}
-                                  </h4>
-                                  <div className="text-xs font-mono font-bold text-rose-600 dark:text-rose-400">
-                                    {roll}
-                                  </div>
-                                </div>
-                                <Badge variant="error">ABSENT TODAY</Badge>
-                              </div>
-
-                              <div className="text-xs text-slate-600 dark:text-slate-400 space-y-1">
-                                <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                                  Batch: {batch}
-                                </div>
-                                {phone && (
-                                  <div className="flex items-center gap-1.5 text-[11px]">
-                                    <PhoneCall className="w-3 h-3 text-slate-400" />
-                                    <a href={`tel:${phone}`} className="hover:underline text-indigo-600 dark:text-indigo-400">
-                                      {phone}
-                                    </a>
-                                  </div>
-                                )}
-                              </div>
-
-                              <div className="pt-2 border-t border-rose-200/50 dark:border-rose-900/40 flex items-center justify-between text-xs">
-                                {email ? (
-                                  <a
-                                    href={`mailto:${email}?subject=Attendance Notice: Absence Today at Netlink&body=Dear ${name},%0D%0A%0D%0AWe observed that your attendance punch was not recorded for today (${todayStr}). Please ensure you check in or submit a regularization request if you faced any technical or transport delay.%0D%0A%0D%0ARegards,%0D%0ANetlink HR Operations`}
-                                    className="text-rose-600 dark:text-rose-400 hover:underline font-bold flex items-center gap-1 text-[11px]"
-                                  >
-                                    <Mail className="w-3 h-3" />
-                                    Follow Up
-                                  </a>
-                                ) : (
-                                  <span />
-                                )}
-                                {student?.id && (
-                                  <Link
-                                    to={`/hr/students/${student.id}`}
-                                    className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-bold text-[11px]"
-                                  >
-                                    Profile →
-                                  </Link>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
+                              return (
+                                <tr key={record.id} className="hover:bg-rose-50/40 dark:hover:bg-rose-950/10 transition-colors">
+                                  <td className="py-3 px-4">
+                                    <div className="font-bold text-slate-900 dark:text-slate-100 text-xs">
+                                      {name}
+                                    </div>
+                                    <div className="font-mono text-[11px] text-rose-600 dark:text-rose-400 font-bold">
+                                      {roll}
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-4">
+                                    <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                                      {batch}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-4">
+                                    <Badge variant="error">ABSENT TODAY</Badge>
+                                  </td>
+                                  <td className="py-3 px-4 text-[11px]">
+                                    {phone && (
+                                      <div className="flex items-center gap-1.5">
+                                        <PhoneCall className="w-3 h-3 text-slate-400 shrink-0" />
+                                        <a href={`tel:${phone}`} className="hover:underline text-indigo-600 dark:text-indigo-400 font-semibold">
+                                          {phone}
+                                        </a>
+                                      </div>
+                                    )}
+                                    {email && (
+                                      <div className="text-slate-500 dark:text-slate-400 truncate max-w-[160px] text-[10px]">
+                                        {email}
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td className="py-3 px-4 text-right">
+                                    <div className="flex items-center justify-end gap-3">
+                                      {email && (
+                                        <a
+                                          href={`mailto:${email}?subject=Attendance Notice: Absence Today at Netlink&body=Dear ${name},%0D%0A%0D%0AWe observed that your attendance punch was not recorded for today (${todayStr}). Please ensure you check in or submit a regularization request if you faced any technical or transport delay.%0D%0A%0D%0ARegards,%0D%0ANetlink HR Operations`}
+                                          className="text-rose-600 dark:text-rose-400 hover:underline font-bold flex items-center gap-1 text-[11px]"
+                                        >
+                                          <Mail className="w-3 h-3" />
+                                          Follow Up
+                                        </a>
+                                      )}
+                                      {student?.id && (
+                                        <Link
+                                          to={`/hr/students/${student.id}`}
+                                          className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-bold text-[11px]"
+                                        >
+                                          Profile →
+                                        </Link>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       </div>
                     ) : (
                       <div className="p-6 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 text-center space-y-1">
@@ -1240,70 +1211,85 @@ export const HRDashboard: React.FC = () => {
                     </div>
 
                     {filteredYesterdayAbsentees.length > 0 ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-                        {filteredYesterdayAbsentees.map((record) => {
-                          const student = record.student;
-                          const name = student?.user?.full_name || 'Enrolled Student';
-                          const roll = student?.roll_number || 'N/A';
-                          const batch = student?.batch?.name || 'Assigned Cohort';
-                          const phone = student?.contact_number || student?.user?.phone;
-                          const email = student?.user?.email;
+                      <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
+                        <table className="w-full text-left text-xs border-collapse">
+                          <thead>
+                            <tr className="bg-slate-50 dark:bg-slate-850 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 font-bold uppercase tracking-wider text-[10px]">
+                              <th className="py-3 px-4">Trainee / Student</th>
+                              <th className="py-3 px-4">Batch</th>
+                              <th className="py-3 px-4">Status</th>
+                              <th className="py-3 px-4">Contact</th>
+                              <th className="py-3 px-4 text-right">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-medium text-slate-700 dark:text-slate-300">
+                            {filteredYesterdayAbsentees.map((record) => {
+                              const student = record.student;
+                              const name = student?.user?.full_name || 'Enrolled Student';
+                              const roll = student?.roll_number || 'N/A';
+                              const batch = student?.batch?.name || 'Assigned Cohort';
+                              const phone = student?.contact_number || student?.user?.phone;
+                              const email = student?.user?.email;
 
-                          return (
-                            <div
-                              key={record.id}
-                              className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-3"
-                            >
-                              <div className="flex items-start justify-between">
-                                <div className="space-y-0.5">
-                                  <h4 className="font-black text-slate-900 dark:text-slate-100 text-sm">
-                                    {name}
-                                  </h4>
-                                  <div className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400">
-                                    {roll}
-                                  </div>
-                                </div>
-                                <Badge variant="neutral">YESTERDAY ABSENT</Badge>
-                              </div>
-
-                              <div className="text-xs text-slate-600 dark:text-slate-400 space-y-1">
-                                <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                                  Batch: {batch}
-                                </div>
-                                {phone && (
-                                  <div className="flex items-center gap-1.5 text-[11px]">
-                                    <PhoneCall className="w-3 h-3 text-slate-400" />
-                                    <a href={`tel:${phone}`} className="hover:underline text-indigo-600 dark:text-indigo-400">
-                                      {phone}
-                                    </a>
-                                  </div>
-                                )}
-                              </div>
-
-                              <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
-                                {email ? (
-                                  <a
-                                    href={`mailto:${email}?subject=Netlink Trainee Check-in: Past Day Absence&body=Dear ${name},%0D%0A%0D%0AWe noted your absence yesterday (${yesterdayStr}). Please reach out to your mentor if you need assistance catching up with class modules.%0D%0A%0D%0ARegards,%0D%0ANetlink HR Operations`}
-                                    className="text-slate-600 dark:text-slate-400 hover:underline font-bold flex items-center gap-1 text-[11px]"
-                                  >
-                                    <Mail className="w-3 h-3" />
-                                    Send Check-in
-                                  </a>
-                                ) : (
-                                  <span />
-                                )}
-                                {student?.id && (
-                                  <Link
-                                    to={`/hr/students/${student.id}`}
-                                    className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-bold text-[11px]"
-                                  >
-                                    Profile →
-                                  </Link>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
+                              return (
+                                <tr key={record.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
+                                  <td className="py-3 px-4">
+                                    <div className="font-bold text-slate-900 dark:text-slate-100 text-xs">
+                                      {name}
+                                    </div>
+                                    <div className="font-mono text-[11px] text-slate-500 dark:text-slate-400 font-bold">
+                                      {roll}
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-4">
+                                    <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                                      {batch}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-4">
+                                    <Badge variant="neutral">YESTERDAY ABSENT</Badge>
+                                  </td>
+                                  <td className="py-3 px-4 text-[11px]">
+                                    {phone && (
+                                      <div className="flex items-center gap-1.5">
+                                        <PhoneCall className="w-3 h-3 text-slate-400 shrink-0" />
+                                        <a href={`tel:${phone}`} className="hover:underline text-indigo-600 dark:text-indigo-400 font-semibold">
+                                          {phone}
+                                        </a>
+                                      </div>
+                                    )}
+                                    {email && (
+                                      <div className="text-slate-500 dark:text-slate-400 truncate max-w-[160px] text-[10px]">
+                                        {email}
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td className="py-3 px-4 text-right">
+                                    <div className="flex items-center justify-end gap-3">
+                                      {email && (
+                                        <a
+                                          href={`mailto:${email}?subject=Netlink Trainee Check-in: Past Day Absence&body=Dear ${name},%0D%0A%0D%0AWe noted your absence yesterday (${yesterdayStr}). Please reach out to your mentor if you need assistance catching up with class modules.%0D%0A%0D%0ARegards,%0D%0ANetlink HR Operations`}
+                                          className="text-slate-600 dark:text-slate-400 hover:underline font-bold flex items-center gap-1 text-[11px]"
+                                        >
+                                          <Mail className="w-3 h-3" />
+                                          Send Check-in
+                                        </a>
+                                      )}
+                                      {student?.id && (
+                                        <Link
+                                          to={`/hr/students/${student.id}`}
+                                          className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-bold text-[11px]"
+                                        >
+                                          Profile →
+                                        </Link>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       </div>
                     ) : (
                       <div className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 text-center space-y-1">

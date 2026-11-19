@@ -44,7 +44,17 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       setIsLoading(true);
       const res = await api.get<NotificationItem[]>('/notifications?limit=50');
-      const list = res || [];
+      const rawList = res || [];
+      // Defensive filter: Ensure only notifications strictly matching the current user are displayed
+      const list = rawList.filter((n) => {
+        if (n.user_id && user.id && n.user_id !== user.id) {
+          return false;
+        }
+        if (n.target_role && user.role && n.target_role !== user.role) {
+          return false;
+        }
+        return true;
+      });
       setNotifications(list);
       setUnreadCount(list.filter((n) => !n.is_read).length);
     } catch {
@@ -105,12 +115,15 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const triggerNotification = async (payload: NotificationCreatePayload) => {
     try {
       await api.post('/notifications', payload);
-      showToast(payload.title, payload.message, payload.notification_type || 'GENERAL');
+      const isForMe = (!payload.user_id && !payload.target_role) ||
+                      (payload.user_id && user?.id && payload.user_id === user.id) ||
+                      (payload.target_role && user?.role && payload.target_role === user.role);
+      if (isForMe) {
+        showToast(payload.title, payload.message, payload.notification_type || 'GENERAL');
+      }
       await fetchNotifications();
     } catch (err: any) {
       console.error('Failed to trigger notification:', err);
-      // Still show local toast even if backend error
-      showToast(payload.title, payload.message, payload.notification_type || 'GENERAL');
     }
   };
 
