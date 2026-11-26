@@ -88,10 +88,8 @@ export const LocationAccessPrompt: React.FC<LocationAccessPromptProps> = ({
     return null;
   }
 
-  // Banner variant has been disabled/removed per UI requirements
-  if (variant === 'banner' || isDismissed) {
-    return null;
-  }
+  // Location prompt banners, cards, and notices have been permanently removed per UI requirements
+  return null;
 
   // Troubleshooter instructions for browsers
   const renderTroubleshoot = () => (

@@ -2,6 +2,8 @@
 
 A web platform for managing intern/trainee lifecycles at Netlink, including recruitment/enrollment, attendance verification, mentoring, task assignments, skill evaluations, and career progression.
 
+> 📖 **Interview & Technical Deep Dive**: For an exhaustive, interview-ready guide on the **Face Biometric Attendance & Geofencing System** (ArcFace 512-D embeddings, 1:1 matching, anti-spoofing, Haversine formula, and 50+ interview Q&As), see [FACE_ATTENDANCE_AND_GEOFENCING_README.md](FACE_ATTENDANCE_AND_GEOFENCING_README.md).
+
 ---
 
 ## Architecture Overview
