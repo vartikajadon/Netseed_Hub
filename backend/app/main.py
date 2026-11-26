@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 
@@ -22,10 +23,21 @@ logger = logging.getLogger(__name__)
 
 _setup_completed = False
 
-def run_db_setup():
+def run_db_setup(force: bool = False):
     """Safely runs DDL migrations and table creation without crashing startup."""
     global _setup_completed
-    if _setup_completed:
+    if _setup_completed and not force:
+        return
+
+    # In Vercel serverless production with PostgreSQL/Supabase, skip running 50+ DDL/index
+    # queries on every container cold start unless explicitly forced (RUN_DB_SETUP=true).
+    is_vercel = bool(os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"))
+    is_postgres = not (not settings.DATABASE_URL or settings.DATABASE_URL.startswith("sqlite"))
+    should_skip = is_vercel and is_postgres and os.environ.get("RUN_DB_SETUP", "").lower() != "true"
+
+    if should_skip and not force:
+        logger.info("Vercel Serverless environment detected: skipping startup DDL to ensure instant cold starts.")
+        _setup_completed = True
         return
 
     try:
@@ -336,13 +348,18 @@ def health_check():
         db_status = "connected"
     except Exception as e:
         db_status = f"disconnected: {str(e)}"
-
     return {
         "status": "healthy",
         "database": db_status,
         "app_name": settings.APP_NAME,
         "environment": settings.ENVIRONMENT
     }
+
+@app.post("/system/setup-db", tags=["System"])
+def trigger_system_setup():
+    """Explicitly triggers DDL migrations and secondary index creation on demand."""
+    run_db_setup(force=True)
+    return {"status": "success", "message": "Database schema verification and indexes updated successfully."}
 
 if __name__ == "__main__":
     import uvicorn

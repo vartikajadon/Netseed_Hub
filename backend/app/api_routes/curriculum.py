@@ -227,7 +227,7 @@ def publish_program_curriculum(
 
 
 @router.post("/parse-doc")
-async def parse_curriculum_doc_file(
+def parse_curriculum_doc_file(
     file: UploadFile = File(...),
     current_user: User = Depends(require_role(["HR", "SUPER_ADMIN"]))
 ):
@@ -242,7 +242,7 @@ async def parse_curriculum_doc_file(
             detail="Invalid file format. Only Word document files (.docx, .doc) are supported for curriculum import."
         )
 
-    content = await file.read()
+    content = file.file.read()
     if not content:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded document file is empty.")
 
@@ -260,7 +260,7 @@ async def parse_curriculum_doc_file(
 
 
 @router.post("/programs/{program_id}/import-doc", response_model=ProgramCurriculumResponse)
-async def import_program_curriculum_from_doc(
+def import_program_curriculum_from_doc(
     program_id: str,
     file: UploadFile = File(...),
     replace_existing: bool = Form(True),
@@ -280,7 +280,7 @@ async def import_program_curriculum_from_doc(
             detail="Invalid file format. Only Word document files (.docx, .doc) are supported for curriculum import."
         )
 
-    content = await file.read()
+    content = file.file.read()
     if not content:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded document file is empty.")
 

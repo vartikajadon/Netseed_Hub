@@ -642,7 +642,7 @@ def import_students_bulk(
 
 
 @router.post("/import-excel", response_model=ImportStudentsResponse, summary="Import students directly from Excel (.xlsx/.xls) or CSV")
-async def import_students_excel(
+def import_students_excel(
     file: UploadFile = File(...),
     default_status: Optional[str] = Form(None),
     current_user: User = Depends(require_hr),
@@ -653,7 +653,7 @@ async def import_students_excel(
     Supports both currently enrolled (ACTIVE/ENROLLED) and previous (COMPLETED/ALUMNI/DROPPED) students.
     """
     filename = file.filename.lower()
-    contents = await file.read()
+    contents = file.file.read()
 
     rows: List[dict] = []
 

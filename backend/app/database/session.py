@@ -46,9 +46,15 @@ else:
     connect_args["keepalives_count"] = 5
 
     # High-performance persistent connection pooling:
-    # Maintain warm connections across requests to eliminate repetitive 200-800ms TCP + SSL handshakes
-    engine_kwargs.setdefault("pool_size", 10)
-    engine_kwargs.setdefault("max_overflow", 20)
+    # Serverless containers scale horizontally: use small pools per container to prevent DB connection exhaustion
+    is_serverless = bool(os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+    if is_serverless:
+        engine_kwargs.setdefault("pool_size", 2)
+        engine_kwargs.setdefault("max_overflow", 3)
+    else:
+        engine_kwargs.setdefault("pool_size", 10)
+        engine_kwargs.setdefault("max_overflow", 20)
+
     engine_kwargs.setdefault("pool_recycle", 300)
     engine_kwargs.setdefault("pool_pre_ping", True)
     engine_kwargs.setdefault("pool_timeout", 10)
