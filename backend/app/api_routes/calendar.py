@@ -311,66 +311,88 @@ DEFAULT_CALENDAR_EVENTS = [
 ]
 
 
+_default_calendar_seeded = False
+
+
 def ensure_default_calendar_seeded(db: Session):
-    for item in DEFAULT_CALENDAR_EVENTS:
-        existing = db.query(CalendarEvent).filter(CalendarEvent.title == item["title"]).first()
-        if not existing:
-            ev = CalendarEvent(
-                id=str(uuid.uuid4()),
-                title=item["title"],
-                description=item["description"],
-                date=item["date"],
-                event_type=item["event_type"],
-                is_off_day=item["is_off_day"],
-                person_name=item["person_name"],
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow()
-            )
-            db.add(ev)
-    
-    # Auto-sync any registered student with a DOB into the calendar
-    students_with_dob = db.query(Student).filter(Student.dob.isnot(None)).all()
-    for s in students_with_dob:
-        ev = db.query(CalendarEvent).filter(
-            (CalendarEvent.student_id == s.id) |
-            (CalendarEvent.description.like(f"%({s.roll_number})%"))
-        ).first()
-        user = s.user or db.query(User).filter(User.id == s.user_id).first()
-        person_name = user.full_name if user else "Student"
-        year = 2026
-        month = s.dob.month
-        day = s.dob.day
-        try:
-            b_date = date(year, month, day)
-        except ValueError:
-            b_date = date(year, 2, 28)
+    global _default_calendar_seeded
+    if _default_calendar_seeded:
+        return
 
-        title = f"{person_name}'s Birthday 🎂"
-        description = f"Happy Birthday to trainee {person_name} ({s.roll_number})! Best wishes from Netlink & netSEED team."
+    from sqlalchemy.orm import joinedload
 
-        if not ev:
-            new_ev = CalendarEvent(
-                id=str(uuid.uuid4()),
-                title=title,
-                description=description,
-                date=b_date,
-                event_type="BIRTHDAY",
-                is_off_day=False,
-                person_name=person_name,
-                student_id=s.id,
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow()
-            )
-            db.add(new_ev)
-        else:
-            ev.title = title
-            ev.description = description
-            ev.date = b_date
-            ev.person_name = person_name
-            ev.student_id = s.id
+    # Batch check all default calendar events in ONE single query
+    default_titles = [item["title"] for item in DEFAULT_CALENDAR_EVENTS]
+    existing_titles = set(
+        r[0] for r in db.query(CalendarEvent.title).filter(CalendarEvent.title.in_(default_titles)).all()
+    )
+
+    new_events = [
+        CalendarEvent(
+            id=str(uuid.uuid4()),
+            title=item["title"],
+            description=item["description"],
+            date=item["date"],
+            event_type=item["event_type"],
+            is_off_day=item["is_off_day"],
+            person_name=item["person_name"],
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        for item in DEFAULT_CALENDAR_EVENTS
+        if item["title"] not in existing_titles
+    ]
+    if new_events:
+        db.add_all(new_events)
+
+    # Auto-sync registered students with a DOB in ONE batch query with eager user loading
+    students_with_dob = db.query(Student).options(joinedload(Student.user)).filter(Student.dob.isnot(None)).all()
+    if students_with_dob:
+        s_ids = [s.id for s in students_with_dob]
+        existing_bday_events = {
+            ev.student_id: ev
+            for ev in db.query(CalendarEvent).filter(CalendarEvent.student_id.in_(s_ids)).all()
+        }
+
+        for s in students_with_dob:
+            user = s.user
+            person_name = user.full_name if user else "Student"
+            year = 2026
+            month = s.dob.month
+            day = s.dob.day
+            try:
+                b_date = date(year, month, day)
+            except ValueError:
+                b_date = date(year, 2, 28)
+
+            title = f"{person_name}'s Birthday 🎂"
+            description = f"Happy Birthday to trainee {person_name} ({s.roll_number})! Best wishes from Netlink & netSEED team."
+
+            ev = existing_bday_events.get(s.id)
+            if not ev:
+                new_ev = CalendarEvent(
+                    id=str(uuid.uuid4()),
+                    title=title,
+                    description=description,
+                    date=b_date,
+                    event_type="BIRTHDAY",
+                    is_off_day=False,
+                    person_name=person_name,
+                    student_id=s.id,
+                    created_at=datetime.utcnow(),
+                    updated_at=datetime.utcnow()
+                )
+                db.add(new_ev)
+            else:
+                ev.title = title
+                ev.description = description
+                ev.date = b_date
+                ev.person_name = person_name
+                ev.student_id = s.id
 
     try:
         db.commit()
+        _default_calendar_seeded = True
     except Exception:
         db.rollback()
 

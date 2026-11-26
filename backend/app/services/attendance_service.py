@@ -487,7 +487,9 @@ class AttendanceService:
     def recalculate_daily_attendance(
         db: Session,
         student_id: str,
-        target_date: date
+        target_date: date,
+        events: Optional[List[AttendanceEvent]] = None,
+        daily_record: Optional[AttendanceDailyRecord] = None
     ) -> AttendanceDailyRecord:
         """
         Computes total daily working hours across all IN -> OUT punch pairs.
@@ -496,16 +498,18 @@ class AttendanceService:
         - < 300 minutes (4:59:59) -> ABSENT
         - Missing Check-Out (open IN) -> INCOMPLETE (treated as Absent until regularized)
         """
-        # Fetch all events for student on date sorted chronologically
-        events = db.query(AttendanceEvent).filter(
-            AttendanceEvent.student_id == student_id,
-            AttendanceEvent.date == target_date
-        ).order_by(AttendanceEvent.timestamp.asc()).all()
+        # Fetch all events for student on date sorted chronologically if not prefetched
+        if events is None:
+            events = db.query(AttendanceEvent).filter(
+                AttendanceEvent.student_id == student_id,
+                AttendanceEvent.date == target_date
+            ).order_by(AttendanceEvent.timestamp.asc()).all()
 
-        daily_record = db.query(AttendanceDailyRecord).filter(
-            AttendanceDailyRecord.student_id == student_id,
-            AttendanceDailyRecord.date == target_date
-        ).first()
+        if daily_record is None:
+            daily_record = db.query(AttendanceDailyRecord).filter(
+                AttendanceDailyRecord.student_id == student_id,
+                AttendanceDailyRecord.date == target_date
+            ).first()
 
         today_date = datetime.utcnow().date()
         if not events:

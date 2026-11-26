@@ -31,10 +31,17 @@ def serialize_payment(p: StudentFeePayment) -> FeePaymentResponse:
         created_at=p.created_at
     )
 
-def calculate_student_fee_summary(student: Student, db: Session) -> StudentFeeSummaryResponse:
-    payments = db.query(StudentFeePayment).filter(
-        StudentFeePayment.student_id == student.id
-    ).order_by(StudentFeePayment.payment_date.desc()).all()
+def calculate_student_fee_summary(
+    student: Student,
+    db: Session,
+    prefetched_payments: Optional[List[StudentFeePayment]] = None
+) -> StudentFeeSummaryResponse:
+    if prefetched_payments is not None:
+        payments = prefetched_payments
+    else:
+        payments = db.query(StudentFeePayment).filter(
+            StudentFeePayment.student_id == student.id
+        ).order_by(StudentFeePayment.payment_date.desc()).all()
 
     total_fees = float(student.total_fees or 0.0)
     total_paid = sum(float(p.amount_paid or 0.0) for p in payments)
@@ -88,7 +95,13 @@ def list_students_fees(
     Returns complete fee status ledger for all students.
     Students can only see their own fee details.
     """
-    query = db.query(Student)
+    from sqlalchemy.orm import joinedload
+    from collections import defaultdict
+
+    query = db.query(Student).options(
+        joinedload(Student.user),
+        joinedload(Student.batch)
+    )
 
     if current_user.role == "STUDENT":
         query = query.filter(Student.user_id == current_user.id)
@@ -97,7 +110,21 @@ def list_students_fees(
             query = query.filter(Student.batch_id == batch_id)
 
     students = query.all()
-    summaries = [calculate_student_fee_summary(st, db) for st in students]
+    student_ids = [st.id for st in students]
+
+    # High-performance batch prefetch: retrieve all student payments in 1 single roundtrip
+    payments_by_student = defaultdict(list)
+    if student_ids:
+        all_payments = db.query(StudentFeePayment).options(
+            joinedload(StudentFeePayment.receiver)
+        ).filter(
+            StudentFeePayment.student_id.in_(student_ids)
+        ).order_by(StudentFeePayment.payment_date.desc()).all()
+
+        for p in all_payments:
+            payments_by_student[p.student_id].append(p)
+
+    summaries = [calculate_student_fee_summary(st, db, payments_by_student[st.id]) for st in students]
 
     # Filter in memory if search or status specified
     if search:

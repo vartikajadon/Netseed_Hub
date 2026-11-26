@@ -212,10 +212,38 @@ def get_global_daily_attendance(
     if batch_id:
         students_query = students_query.filter(Student.batch_id == batch_id)
 
+    from collections import defaultdict
     students = students_query.all()
-    for s in students:
-        AttendanceService.recalculate_daily_attendance(db, s.id, query_date)
-    db.commit()
+    student_ids = [s.id for s in students]
+
+    if student_ids:
+        # High-performance batch prefetch: fetch all existing records & events in 2 single roundtrips
+        existing_records = {
+            r.student_id: r
+            for r in db.query(AttendanceDailyRecord).filter(
+                AttendanceDailyRecord.student_id.in_(student_ids),
+                AttendanceDailyRecord.date == query_date
+            ).all()
+        }
+
+        all_events = db.query(AttendanceEvent).filter(
+            AttendanceEvent.student_id.in_(student_ids),
+            AttendanceEvent.date == query_date
+        ).order_by(AttendanceEvent.timestamp.asc()).all()
+
+        events_by_student = defaultdict(list)
+        for ev in all_events:
+            events_by_student[ev.student_id].append(ev)
+
+        for s in students:
+            AttendanceService.recalculate_daily_attendance(
+                db=db,
+                student_id=s.id,
+                target_date=query_date,
+                events=events_by_student.get(s.id, []),
+                daily_record=existing_records.get(s.id)
+            )
+        db.commit()
 
     # Fetch daily records
     records_query = db.query(AttendanceDailyRecord).join(Student).filter(AttendanceDailyRecord.date == query_date)
